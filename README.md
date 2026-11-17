@@ -19,10 +19,10 @@ Measure the **temperature, humidity and air pressure** in your rooms with a smal
 
 ```mermaid
 flowchart LR
-    A["📟 Sensor<br/>(ATOM Lite + BME280)"] -- WiFi --> B["📮 Mosquitto<br/>message post office"]
-    B --> C["⚙️ Ingestion service<br/>checks & saves readings"]
-    C --> D["🗄️ PostgreSQL<br/>database"]
-    D --> E["📊 Grafana<br/>dashboard"]
+    A[Sensor] -->|WiFi| B[Mosquitto]
+    B --> C[Ingestion service]
+    C --> D[PostgreSQL]
+    D --> E[Grafana]
 ```
 
 1. **The sensor** measures the room and sends the numbers over WiFi.
