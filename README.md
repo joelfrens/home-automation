@@ -21,7 +21,7 @@ flowchart LR
 |---|---|---|
 | Device | ESP32 (M5Stack ATOM Lite), Bosch BME280 over I2C, Arduino C++, PubSubClient | `firmware/` |
 | Messaging | MQTT, Eclipse Mosquitto 2 | `mosquitto/` |
-| Ingestion | Node.js, TypeScript (ESM / NodeNext), mqtt.js, Zod, node-postgres | `ingestion/` |
+| Ingestion | Node.js, TypeScript (ESM / NodeNext), mqtt.js, Zod 4, node-postgres, Vitest | `ingestion/` |
 | Storage | PostgreSQL 17 | `db/` |
 | Visualisation | Grafana (provisioned datasource + dashboard), Adminer | `grafana/` |
 | Infrastructure | Docker Compose | `docker-compose.yml` |
@@ -123,7 +123,20 @@ Applied by `db/init.sql` on first start of an empty volume. `recorded_at` is the
 | `RETRY_MS` | `5000` | Delay between failed write retries |
 | `STATS_EVERY_MS` | `60000` | Interval of the `[stats]` log line |
 
-Scripts: `npm run dev` (tsx watch), `npm run build` + `npm start` (compiled), `npm run typecheck`, `npm run simulate`.
+Scripts: `npm run dev` (tsx watch), `npm run build` + `npm start` (compiled), `npm run typecheck`, `npm run simulate`, `npm test` / `npm run test:watch`.
+
+### Tests
+
+```bash
+cd ingestion && npm test
+```
+
+41 Vitest unit tests, no infrastructure required (the database writer is replaced with a fake, timers with Vitest fake timers), run in well under a second:
+
+- **`test/schema.test.ts`** — topic parsing (segment count, prefix, allowed characters, length limit) and payload validation (BME280 boundary values, out-of-range values, wrong types, missing fields, unknown fields stripped).
+- **`test/buffer.test.ts`** — write buffer behaviour: immediate write, batching while a write is in flight, `batchSize` limit, retry after `retryMs` without hammering the DB, failed batch re-queued at the front in order, recovery after repeated failures, oldest-first drop when full, and `drain()` on shutdown (cancels pending retry, batches, waits for in-flight write, never throws).
+
+The suite was mutation-checked: deliberately breaking re-queue order, drop order or the retry back-off each causes a failing test.
 
 ### Repository layout
 
@@ -136,6 +149,7 @@ ingestion/src/
   db.ts                          pg pool + batched insert
   config.ts                      Env-driven configuration
   simulator.ts                   Fake multi-room publisher with drift and invalid-message injection
+ingestion/test/                  Vitest unit tests (schema, write buffer)
 db/init.sql                      Schema and index
 mosquitto/mosquitto.conf         Broker config
 grafana/provisioning/
@@ -167,6 +181,7 @@ Development configuration for a trusted LAN: Mosquitto accepts anonymous clients
 - [ ] Laravel + React (Inertia) web app with live updates via Reverb; MQTT command path to devices (lights/switches)
 - [ ] AI features over the collected data
 - [ ] Deploy to Raspberry Pi 5: Docker, systemd for ingestion, Chromium kiosk on the attached display
-- [ ] Unit tests for ingestion (validation, buffer retry/drop behaviour)
+- [x] Unit tests for ingestion (validation, buffer retry/drop behaviour)
+- [ ] Run tests in CI (GitHub Actions) on every push
 - [ ] Node-side buffering with NTP timestamps to survive WiFi outages without data gaps
 - [ ] Long-range LoRa node (SX1262, 868 MHz) with a LoRa → MQTT gateway for sites without WiFi
