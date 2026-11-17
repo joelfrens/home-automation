@@ -33,6 +33,9 @@ Development can use simulated readings; physical sensors run alongside.
 - [x] ingestion/ (TypeScript, ESM, NodeNext): subscribes home/+/bme280, validates with Zod,
       buffers in memory and batch-inserts to Postgres, retries if DB is down, drops oldest
       when buffer is full, graceful shutdown. npm run dev / npm run simulate
+      Tests: ingestion/test/ (Vitest 4, 41 unit tests for schema + buffer, fake timers, no infra). npm test
+      Deps: zod 4.6.7 (upgraded from 3 for GHSA-mrhx-c7xc-m3w5). Known dev-only advisory: picomatch
+      via vite/vitest, no fix yet; npm audit fix --force suggests downgrading vitest, do NOT do that.
 - [x] Grafana dashboards (provisioned from grafana/provisioning/dashboards/files/)
 - [ ] Laravel + React app (Inertia starter kit, Reverb for live updates,
       Laravel publishes MQTT commands to devices)
