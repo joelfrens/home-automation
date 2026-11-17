@@ -39,6 +39,18 @@ Development can use simulated readings; physical sensors run alongside.
 - [ ] AI features
 - [ ] Deploy to Raspberry Pi 5 (Docker, systemd, Chromium kiosk mode on its screen)
 - [ ] Push to GitHub with README, diagram and photos
+- [ ] Bonus: LoRa long-range sensor, for places without WiFi (not bought yet)
+      Design: point-to-point LoRa (no LoRaWAN gateway). Remote board reads BME280 and sends over LoRa;
+      home gateway board receives and publishes to MQTT on the same topic/payload, so ingestion,
+      Postgres and Grafana stay unchanged. Show last reading / RSSI on each board's OLED.
+      Later: on-device buffering + NTP timestamps (payload gets a time field) for offline gaps.
+      Shopping list (approx. £50–75 total):
+        - 2x Heltec WiFi LoRa 32 V3 (ESP32-S3 + SX1262 + OLED), 868 MHz version (UK/EU), with antenna
+          Library: RadioLib. Never power on without the antenna attached.
+        - 1x BME280 that really measures humidity (not a BMP280): Grove BME280 + Grove-to-female-jumper
+          cable, or an Adafruit/Pimoroni/SparkFun breakout
+        - Optional: 3.7 V LiPo with JST 1.25 mm plug (check polarity), female-female jumper wires
+      Build in stages: LoRa "hello" between boards -> sensor readings -> gateway into MQTT.
 
 ## Useful commands
 - Start infrastructure: docker compose up -d
