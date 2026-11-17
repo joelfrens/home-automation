@@ -25,7 +25,7 @@ Development can use simulated readings; physical sensors run alongside.
       Topic: home/<room>/bme280, e.g. home/living-room/bme280
       Payload: {"temperature":22.70,"humidity":40.09,"pressure":984.88}
       LED: blue = connecting, green = sent, red = problem
-- [x] docker-compose.yml: Mosquitto :1883, PostgreSQL 17 :5432, Grafana :3001 (admin/admin)
+- [x] docker-compose.yml: Mosquitto :1883, PostgreSQL 17 :5433 (host port; 5432 is taken by Homebrew Postgres), Grafana :3001 (admin/admin)
       DB: user home / password home_dev_password / database home
       Table sensor_readings(id, room, sensor, temperature_c, humidity_pct, pressure_hpa, recorded_at)
       Created by db/init.sql (Laravel migrations should take ownership later)
@@ -43,9 +43,12 @@ Development can use simulated readings; physical sensors run alongside.
 - Start infrastructure: docker compose up -d
 - Watch MQTT traffic: docker exec -it home-mosquitto mosquitto_sub -t 'home/#' -v
 - Send a test message: docker exec home-mosquitto mosquitto_pub -t 'home/test/bme280' -m '{"temperature":21,"humidity":40,"pressure":1000}'
+- Browse DB in browser: Adminer http://localhost:8081 (PostgreSQL, server postgres, user home, db home)
 - Latest rows: docker exec -it home-postgres psql -U home -c "SELECT * FROM sensor_readings ORDER BY recorded_at DESC LIMIT 5;"
 
 ## Conventions
 - Room/sensor names: lowercase letters, numbers and dashes only
 - Mosquitto allows anonymous access: development only, add auth before exposing beyond LAN
 - Keep docker-compose portable so the same stack runs on the Pi 5
+- Git: Claude may commit when asked but must NEVER run git push. The owner pushes manually
+  (remote: https://github.com/joelfrens/home-automation, branch main)

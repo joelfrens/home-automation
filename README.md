@@ -7,7 +7,7 @@ Learning project: ESP32 sensors → MQTT → TypeScript ingestion → PostgreSQL
 
 ## Run it
 
-    docker compose up -d            # Mosquitto :1883, PostgreSQL :5432, Grafana :3001
+    docker compose up -d            # Mosquitto :1883, PostgreSQL :5433, Grafana :3001, Adminer (DB web UI) :8081
     cd ingestion && npm install
     npm run dev                     # ingestion service
     npm run simulate                # (optional, second terminal) fake sensors
