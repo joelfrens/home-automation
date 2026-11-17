@@ -1,0 +1,252 @@
+{
+  "uid": "home-sensors",
+  "title": "Home sensors",
+  "tags": ["home", "bme280"],
+  "timezone": "browser",
+  "refresh": "5s",
+  "time": { "from": "now-6h", "to": "now" },
+  "schemaVersion": 39,
+  "editable": true,
+  "templating": {
+    "list": [
+      {
+        "name": "room",
+        "label": "Room",
+        "type": "query",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "home-postgres" },
+        "query": "SELECT DISTINCT room FROM sensor_readings ORDER BY room",
+        "definition": "SELECT DISTINCT room FROM sensor_readings ORDER BY room",
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "current": { "selected": true, "text": ["All"], "value": ["$__all"] }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Temperature now",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 5 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "home-postgres" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT DISTINCT ON (room) room, temperature_c AS value\nFROM sensor_readings\nWHERE room IN ($room)\nORDER BY room, recorded_at DESC"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "values": true, "calcs": ["lastNotNull"], "fields": "/^value$/" },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
+          "displayName": "${__data.fields.room}",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null },
+              { "color": "green", "value": 18 },
+              { "color": "orange", "value": 25 },
+              { "color": "red", "value": 28 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "title": "Humidity now",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 5 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "home-postgres" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT DISTINCT ON (room) room, humidity_pct AS value\nFROM sensor_readings\nWHERE room IN ($room)\nORDER BY room, recorded_at DESC"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "values": true, "calcs": ["lastNotNull"], "fields": "/^value$/" },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "displayName": "${__data.fields.room}",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "orange", "value": null },
+              { "color": "green", "value": 35 },
+              { "color": "orange", "value": 60 },
+              { "color": "red", "value": 70 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "Pressure now",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 5 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "home-postgres" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT DISTINCT ON (room) room, pressure_hpa AS value\nFROM sensor_readings\nWHERE room IN ($room)\nORDER BY room, recorded_at DESC"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "values": true, "calcs": ["lastNotNull"], "fields": "/^value$/" },
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "pressurehpa",
+          "decimals": 1,
+          "displayName": "${__data.fields.room}"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "Seconds since last reading",
+      "description": "Turns red if no reading has arrived for 30 s – check the ATOM, WiFi, Mosquitto and the ingestion service.",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 5 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "home-postgres" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT room, EXTRACT(EPOCH FROM now() - max(recorded_at)) AS value\nFROM sensor_readings\nWHERE room IN ($room)\nGROUP BY room\nORDER BY room"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "values": true, "calcs": ["lastNotNull"], "fields": "/^value$/" },
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "displayName": "${__data.fields.room}",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 30 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "Temperature",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 9 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "home-postgres" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT $__timeGroupAlias(recorded_at, $__interval), room AS metric, avg(temperature_c) AS value\nFROM sensor_readings\nWHERE $__timeFilter(recorded_at) AND room IN ($room)\nGROUP BY 1, room\nORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": 60000 }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 6,
+      "title": "Humidity",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 9 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "home-postgres" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT $__timeGroupAlias(recorded_at, $__interval), room AS metric, avg(humidity_pct) AS value\nFROM sensor_readings\nWHERE $__timeFilter(recorded_at) AND room IN ($room)\nGROUP BY 1, room\nORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": 60000 }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 7,
+      "title": "Pressure",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 9 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "home-postgres" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT $__timeGroupAlias(recorded_at, $__interval), room AS metric, avg(pressure_hpa) AS value\nFROM sensor_readings\nWHERE $__timeFilter(recorded_at) AND room IN ($room)\nGROUP BY 1, room\nORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "pressurehpa",
+          "decimals": 1,
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": 60000 }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    }
+  ]
+}
