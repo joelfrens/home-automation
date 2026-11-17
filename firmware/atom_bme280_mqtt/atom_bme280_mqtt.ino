@@ -4,7 +4,7 @@
 //
 // Publishes every 5 s to topic  home/<ROOM>/bme280
 // Payload: {"temperature":22.70,"humidity":40.09,"pressure":984.88}
-// LED: blue = connecting, green = sent, red = problem
+// LED: blue = connecting, short green blink = sent, red (stays on) = problem
 
 #include <WiFi.h>
 #include <PubSubClient.h>
@@ -29,6 +29,8 @@ PubSubClient mqtt(net);
 char topic[64];
 char clientId[32];
 unsigned long lastSend = 0;
+unsigned long ledOffAt = 0;   // when to switch off the green "sent" blink (0 = no blink pending)
+const unsigned long BLINK_MS = 150;
 
 void led(uint8_t r, uint8_t g, uint8_t b) { rgbLedWrite(LED_PIN, r / 4, g / 4, b / 4); }
 
@@ -84,6 +86,9 @@ void setup() {
 void loop() {
   mqtt.loop();  // keeps the MQTT connection alive
 
+  // End the green blink without delay(), so the loop never blocks
+  if (ledOffAt && millis() >= ledOffAt) { led(0, 0, 0); ledOffAt = 0; }
+
   if (millis() - lastSend < SEND_INTERVAL_MS) return;
   lastSend = millis();
 
@@ -101,6 +106,7 @@ void loop() {
 
   if (mqtt.publish(topic, payload)) {
     led(0, 255, 0);
+    ledOffAt = millis() + BLINK_MS;
     Serial.printf("%s %s\n", topic, payload);
   } else {
     led(255, 0, 0);

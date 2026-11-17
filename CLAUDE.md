@@ -24,7 +24,7 @@ Development can use simulated readings; physical sensors run alongside.
 - [x] Firmware publishes every 5 s over MQTT (firmware/atom_bme280_mqtt/)
       Topic: home/<room>/bme280, e.g. home/living-room/bme280
       Payload: {"temperature":22.70,"humidity":40.09,"pressure":984.88}
-      LED: blue = connecting, green = sent, red = problem
+      LED: blue = connecting, short green blink every 5 s = sent, red (stays on) = problem
 - [x] docker-compose.yml: Mosquitto :1883, PostgreSQL 17 :5433 (host port; 5432 is taken by Homebrew Postgres), Grafana :3001 (admin/admin)
       DB: user home / password home_dev_password / database home
       Table sensor_readings(id, room, sensor, temperature_c, humidity_pct, pressure_hpa, recorded_at)
@@ -32,7 +32,7 @@ Development can use simulated readings; physical sensors run alongside.
 - [x] ingestion/ (TypeScript, ESM, NodeNext): subscribes home/+/bme280, validates with Zod,
       buffers in memory and batch-inserts to Postgres, retries if DB is down, drops oldest
       when buffer is full, graceful shutdown. npm run dev / npm run simulate
-- [ ] Grafana dashboards
+- [x] Grafana dashboards (provisioned from grafana/provisioning/dashboards/files/)
 - [ ] Laravel + React app (Inertia starter kit, Reverb for live updates,
       Laravel publishes MQTT commands to devices)
 - [ ] AI features
