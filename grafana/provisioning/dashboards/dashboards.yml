@@ -1,0 +1,10 @@
+# Tells Grafana to load every dashboard JSON file in the files/ folder.
+apiVersion: 1
+
+providers:
+  - name: home
+    folder: Home
+    type: file
+    allowUiUpdates: true          # you can edit in the UI, but export changes back to the JSON to keep them
+    options:
+      path: /etc/grafana/provisioning/dashboards/files

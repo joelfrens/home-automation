@@ -31,7 +31,7 @@ Grafana: http://localhost:3001 (admin / admin), PostgreSQL datasource pre-config
 - [x] ESP32 firmware publishing over MQTT
 - [x] Docker stack: Mosquitto, PostgreSQL, Grafana
 - [x] TypeScript ingestion service with validation and retry
-- [ ] Grafana dashboards
+- [x] Grafana dashboards (provisioned from grafana/provisioning/dashboards/files/)
 - [ ] Laravel + React dashboard (Inertia, Reverb for live updates)
 - [ ] AI features
 - [ ] Deploy to Raspberry Pi 5
