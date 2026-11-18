@@ -26,9 +26,9 @@ jobs:
       run:
         working-directory: ingestion
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -58,7 +58,7 @@ jobs:
       ESP32_CORE: "3.3.12"
       ESP32_INDEX: https://espressif.github.io/arduino-esp32/package_esp32_index.json
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # The ESP32 toolchain is several hundred MB; cache it between runs.
       - name: Cache Arduino core and libraries
@@ -88,7 +88,7 @@ jobs:
     name: Docker Compose config
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Validate docker-compose.yml
         run: docker compose config --quiet

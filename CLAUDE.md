@@ -72,6 +72,9 @@ Development can use simulated readings; physical sensors run alongside.
 .github/workflows/ci.yml runs on every push/PR: ingestion (npm ci, typecheck, test, build, prod audit;
 Node 22 + 24), firmware compile with arduino-cli (esp32 core 3.3.12, placeholder secrets.h copied
 from secrets.example.h), docker compose config. Keep ESP32_CORE / library versions in sync with local.
+Lockfile gotcha: local npm 11.6.2 (macOS) omits optional wasm deps (@emnapi/*) that npm ci on Linux
+requires. After changing deps, verify with: docker run --rm --platform linux/arm64 -v "$PWD":/repo
+-w /repo/ingestion node:22 npm ci  (use --platform linux/arm64; amd64 emulation crashes node on M1).
 
 ## Useful commands
 - Start infrastructure: docker compose up -d
