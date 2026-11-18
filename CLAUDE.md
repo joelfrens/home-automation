@@ -68,6 +68,11 @@ Development can use simulated readings; physical sensors run alongside.
         - Optional: 3.7 V LiPo with JST 1.25 mm plug (check polarity), female-female jumper wires
       Build in stages: LoRa "hello" between boards -> sensor readings -> gateway into MQTT.
 
+## CI
+.github/workflows/ci.yml runs on every push/PR: ingestion (npm ci, typecheck, test, build, prod audit;
+Node 22 + 24), firmware compile with arduino-cli (esp32 core 3.3.12, placeholder secrets.h copied
+from secrets.example.h), docker compose config. Keep ESP32_CORE / library versions in sync with local.
+
 ## Useful commands
 - Start infrastructure: docker compose up -d
 - Watch MQTT traffic: docker exec -it home-mosquitto mosquitto_sub -t 'home/#' -v

@@ -1,5 +1,7 @@
 # Home Sensor Platform
 
+[![CI](https://github.com/joelfrens/home-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/joelfrens/home-automation/actions/workflows/ci.yml)
+
 End-to-end IoT telemetry pipeline: ESP32 sensor nodes publish environmental readings over MQTT; a TypeScript ingestion service validates and persists them to PostgreSQL; Grafana visualises them. Fully containerised, configuration-as-code, designed to run unchanged on a Raspberry Pi 5.
 
 <!-- TODO: add photos/screenshots, e.g.
@@ -182,7 +184,7 @@ Development configuration for a trusted LAN: Mosquitto accepts anonymous clients
 - [ ] AI features over the collected data
 - [ ] Deploy to Raspberry Pi 5: Docker, systemd for ingestion, Chromium kiosk on the attached display
 - [x] Unit tests for ingestion (validation, buffer retry/drop behaviour)
-- [ ] Run tests in CI (GitHub Actions) on every push
+- [x] CI with GitHub Actions: ingestion type-check, tests, build and audit (Node 22 & 24), ESP32 firmware compile, Compose validation
 - [ ] Node-side buffering with NTP timestamps to survive WiFi outages without data gaps
 - [ ] OTA firmware updates: ArduinoOTA for development, then MQTT-triggered HTTP OTA with signed images for fleet updates
 - [ ] Support additional sensor types (water level, air quality) via a per-type validation registry and a generic measurements table
