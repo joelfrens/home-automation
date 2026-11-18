@@ -42,6 +42,19 @@ Development can use simulated readings; physical sensors run alongside.
 - [ ] AI features
 - [ ] Deploy to Raspberry Pi 5 (Docker, systemd, Chromium kiosk mode on its screen)
 - [ ] Push to GitHub with README, diagram and photos
+- [ ] OTA firmware updates (later)
+      Stage 1: ArduinoOTA – push from Arduino IDE over WiFi (network port), OTA password,
+      FW_VERSION constant published at boot. First OTA-capable build must go over USB.
+      Keep Partition Scheme "Default 4MB with spiffs" (OTA-capable; NOT "Huge APP (no OTA)").
+      Stage 2 (with Laravel/MQTT command path): device pulls signed .bin over HTTP when sent an
+      MQTT command (e.g. home/<room>/<sensor>/cmd), reports new version; fleet update from web app.
+- [ ] Multi-sensor ingestion (later): water level, air quality, etc.
+      Only schema.ts (fixed BME280 payload) and sensor_readings/db.ts (fixed columns) are
+      BME280-specific; MQTT, buffer, retry, shutdown are generic and reusable.
+      Proposed: per-sensor-type Zod registry keyed by the topic's <sensor> segment (unknown types
+      rejected + logged) and a generic narrow table measurements(time, room, sensor, metric,
+      value, unit). Decide before Laravel migrations take ownership of the schema. Not yet agreed
+      with owner – confirm storage design first.
 - [ ] Bonus: LoRa long-range sensor, for places without WiFi (not bought yet)
       Design: point-to-point LoRa (no LoRaWAN gateway). Remote board reads BME280 and sends over LoRa;
       home gateway board receives and publishes to MQTT on the same topic/payload, so ingestion,

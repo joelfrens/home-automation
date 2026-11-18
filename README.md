@@ -184,4 +184,6 @@ Development configuration for a trusted LAN: Mosquitto accepts anonymous clients
 - [x] Unit tests for ingestion (validation, buffer retry/drop behaviour)
 - [ ] Run tests in CI (GitHub Actions) on every push
 - [ ] Node-side buffering with NTP timestamps to survive WiFi outages without data gaps
+- [ ] OTA firmware updates: ArduinoOTA for development, then MQTT-triggered HTTP OTA with signed images for fleet updates
+- [ ] Support additional sensor types (water level, air quality) via a per-type validation registry and a generic measurements table
 - [ ] Long-range LoRa node (SX1262, 868 MHz) with a LoRa → MQTT gateway for sites without WiFi
