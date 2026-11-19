@@ -55,7 +55,49 @@ services:
       - postgres
     restart: unless-stopped
 
+  web:   # Laravel + React app (FrankenPHP serves Laravel's public/ folder)
+    build:
+      context: ./web
+      target: dev                 # Dockerfile stage with PHP + Node (see web/Dockerfile)
+    image: home-web
+    container_name: home-web
+    ports:
+      - "8000:80"
+    environment:
+      SERVER_NAME: ":80"          # FrankenPHP: plain HTTP on port 80 inside the container
+      # Inside Docker, reach Postgres by service name. These override web/.env
+      # (which keeps localhost:5433 for artisan commands run directly on the Mac).
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: home
+      DB_USERNAME: home
+      DB_PASSWORD: home_dev_password
+    volumes:
+      - ./web:/app                # live code from the Mac, no rebuild needed when editing
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  vite:   # development only: compiles React/TypeScript and hot-reloads the browser
+    image: home-web               # same image as "web" (needs PHP for Wayfinder + Node for Vite)
+    depends_on:
+      - web
+    container_name: home-vite
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web:/app
+      - web-node-modules:/app/node_modules   # Linux packages, kept separate from the Mac's node_modules
+    healthcheck:
+      disable: true               # the image's built-in check is for the PHP web server, which this container doesn't run
+    restart: unless-stopped
+
 volumes:
+  web-node-modules:
   mosquitto-data:
   pg-data:
   grafana-data:
