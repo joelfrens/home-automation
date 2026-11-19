@@ -54,6 +54,16 @@ Development can use simulated readings; physical sensors run alongside.
       rejected + logged) and a generic narrow table measurements(time, room, sensor, metric,
       value, unit). Decide before Laravel migrations take ownership of the schema. Not yet agreed
       with owner – confirm storage design first.
+- [ ] Music in the dashboard (later, with Pi deployment)
+      Speaker: Apple HomePod mini – AirPlay 2 only (no AUX; Bluetooth is setup-only).
+      Plan: OwnTone in docker-compose (network_mode: host for mDNS discovery) streams to the
+      HomePod over AirPlay 2 (~2 s latency). Sources: Spotify via OwnTone's built-in Spotify
+      support (needs Premium), local files, internet radio. Dashboard "Music" panel calls
+      OwnTone's JSON API (play/pause/skip/volume/outputs/now playing + artwork).
+      Home app: HomePod speaker access must allow devices on the same network.
+      Multi-room later by adding AirPlay speakers. Apple Music: native on HomePod but no public
+      control API – out of scope. Spotify Web Playback SDK / librespot only relevant for
+      non-AirPlay speakers (Pi 5 has no 3.5 mm jack – needs USB DAC/HAT).
 - [ ] Bonus: LoRa long-range sensor, for places without WiFi (not bought yet)
       Design: point-to-point LoRa (no LoRaWAN gateway). Remote board reads BME280 and sends over LoRa;
       home gateway board receives and publishes to MQTT on the same topic/payload, so ingestion,
