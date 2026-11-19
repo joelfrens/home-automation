@@ -186,4 +186,5 @@ Development configuration for a trusted LAN: Mosquitto accepts anonymous clients
 - [ ] Node-side buffering with NTP timestamps to survive WiFi outages without data gaps
 - [ ] OTA firmware updates: ArduinoOTA for development, then MQTT-triggered HTTP OTA with signed images for fleet updates
 - [ ] Support additional sensor types (water level, air quality) via a per-type validation registry and a generic measurements table
+- [ ] Music: OwnTone streaming Spotify and local media to AirPlay 2 speakers (HomePod mini), controlled from the dashboard via its JSON API
 - [ ] Long-range LoRa node (SX1262, 868 MHz) with a LoRa → MQTT gateway for sites without WiFi
