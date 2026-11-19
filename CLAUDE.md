@@ -36,8 +36,23 @@ Development can use simulated readings; physical sensors run alongside.
       Deps: zod 4.6.7 (upgraded from 3 for GHSA-mrhx-c7xc-m3w5). Known dev-only advisory: picomatch
       via vite/vitest, no fix yet; npm audit fix --force suggests downgrading vitest, do NOT do that.
 - [x] Grafana dashboards (provisioned from grafana/provisioning/dashboards/files/)
-- [ ] Laravel + React app (Inertia starter kit, Reverb for live updates,
-      Laravel publishes MQTT commands to devices)
+- [ ] Laravel + React app in web/ (IN PROGRESS – Stage 1 done)
+      Laravel 13, React starter kit (Inertia 3, React 19, Tailwind 4, Wayfinder, Pest), runs in Docker
+      (NOT Sail, NOT Herd): web/Dockerfile (FrankenPHP; "dev" stage adds Node because Vite's Wayfinder
+      plugin runs php artisan). Services: web http://localhost:8000, vite :5173 (same home-web image).
+      DB: Laravel tables live in the same Postgres db "home"; compose env sets DB_HOST=postgres:5432,
+      web/.env keeps 127.0.0.1:5433 for artisan on the Mac.
+      Login: registration disabled; single user from DatabaseSeeder using ADMIN_* in web/.env.
+      "/" redirects to /dashboard. Welcome/register pages removed.
+      DANGER: tests use RefreshDatabase (drops all tables). On 2026-11-19 a test run in the container
+      wiped the real "home" db (1,498 readings lost) because Docker env vars live in $_SERVER and
+      phpunit <env> did not override them. Fixed: phpunit.xml forces <server>+<env> DB_* to in-memory
+      SQLite, and tests/TestCase.php setUpTraits() refuses any other database. Never weaken either;
+      take a pg_dump before anything that could drop tables.
+      Next: decide readings storage (generic measurements table vs keep sensor_readings) and how
+      Laravel learns about readings (php artisan mqtt:listen vs ingestion -> Reverb), then dashboard
+      page, then Reverb (public channel, then private), then CI job + docs. Laravel later publishes
+      MQTT commands to devices. web/.github/workflows/tests.yml does not run (not at repo root).
 - [ ] AI features
 - [ ] Deploy to Raspberry Pi 5 (Docker, systemd, Chromium kiosk mode on its screen)
 - [ ] Push to GitHub with README, diagram and photos
@@ -82,6 +97,10 @@ Development can use simulated readings; physical sensors run alongside.
 - Watch MQTT traffic: docker exec -it home-mosquitto mosquitto_sub -t 'home/#' -v
 - Send a test message: docker exec home-mosquitto mosquitto_pub -t 'home/test/bme280' -m '{"temperature":21,"humidity":40,"pressure":1000}'
 - Browse DB in browser: Adminer http://localhost:8081 (PostgreSQL, server postgres, user home, db home)
+- Laravel: docker compose exec web php artisan <cmd>   (migrate, db:seed, test, tinker)
+- Laravel tests: docker compose exec web php artisan test   (in-memory SQLite, never the real db)
+- React type check: docker compose exec vite npm run types:check
+- Back up the db: docker compose exec -T postgres pg_dump -U home home > backup.sql
 - Latest rows: docker exec -it home-postgres psql -U home -c "SELECT * FROM sensor_readings ORDER BY recorded_at DESC LIMIT 5;"
 
 ## Conventions
