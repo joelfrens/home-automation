@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "cc7af213892518b14b02eda02d48174e",
+    "content-hash": "fc30794c079c00a69bc1066096f37b4b",
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
@@ -1286,6 +1286,55 @@
                 "source": "https://github.com/inertiajs/inertia-laravel/tree/v3.7.0"
             },
             "time": "2026-11-02T10:29:10+00:00"
+        },
+        {
+            "name": "joelfrens/home-automation-sensors",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "../packages/sensors",
+                "reference": "d04fb16533a3cf802ffd239a824c604450ad37b8"
+            },
+            "require": {
+                "illuminate/database": "^13.0",
+                "illuminate/support": "^13.0",
+                "php": "^8.4"
+            },
+            "require-dev": {
+                "orchestra/testbench": "^11.0"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Joelfrens\\HomeAutomation\\Sensors\\SensorsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Joelfrens\\HomeAutomation\\Sensors\\": "src/",
+                    "Joelfrens\\HomeAutomation\\Sensors\\Database\\Factories\\": "database/factories/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "Joelfrens\\HomeAutomation\\Sensors\\Tests\\": "tests/"
+                }
+            },
+            "scripts": {
+                "test": [
+                    "phpunit"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "Sensor types, measurement storage and queries (latest per room, averaged history) for the home automation Laravel app",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "laravel/chisel",
@@ -11443,12 +11492,14 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": {
+        "joelfrens/home-automation-sensors": 20
+    },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
         "php": "^8.3"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.11.0"
 }

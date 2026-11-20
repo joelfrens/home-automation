@@ -1,7 +1,18 @@
-import { roomLabel } from '@/components/readings/room-card';
-import type { Reading } from '@/types';
+import { formatValue, roomLabel } from '@/components/readings/metric-format';
+import type { MetricDefinition, RecentReading } from '@/types';
 
-export function RecentReadings({ readings }: { readings: Reading[] }) {
+export function RecentReadings({
+    readings,
+    metrics,
+}: {
+    readings: RecentReading[];
+    metrics: MetricDefinition[];
+}) {
+    // One column per metric that appears in these readings
+    const columns = metrics.filter((m) =>
+        readings.some((r) => m.key in r.values),
+    );
+
     return (
         <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -9,15 +20,14 @@ export function RecentReadings({ readings }: { readings: Reading[] }) {
                     <tr className="border-b">
                         <th className="py-2 pr-4 font-medium">Time</th>
                         <th className="py-2 pr-4 font-medium">Room</th>
-                        <th className="py-2 pr-4 text-right font-medium">
-                            Temp °C
-                        </th>
-                        <th className="py-2 pr-4 text-right font-medium">
-                            Humidity %
-                        </th>
-                        <th className="py-2 text-right font-medium">
-                            Pressure hPa
-                        </th>
+                        {columns.map((m) => (
+                            <th
+                                key={m.key}
+                                className="py-2 pr-4 text-right font-medium last:pr-0"
+                            >
+                                {m.label} {m.unit}
+                            </th>
+                        ))}
                     </tr>
                 </thead>
                 <tbody className="tabular-nums">
@@ -36,15 +46,16 @@ export function RecentReadings({ readings }: { readings: Reading[] }) {
                                 )}
                             </td>
                             <td className="py-2 pr-4">{roomLabel(r.room)}</td>
-                            <td className="py-2 pr-4 text-right">
-                                {r.temperature.toFixed(2)}
-                            </td>
-                            <td className="py-2 pr-4 text-right">
-                                {r.humidity.toFixed(2)}
-                            </td>
-                            <td className="py-2 text-right">
-                                {r.pressure.toFixed(2)}
-                            </td>
+                            {columns.map((m) => (
+                                <td
+                                    key={m.key}
+                                    className="py-2 pr-4 text-right last:pr-0"
+                                >
+                                    {m.key in r.values
+                                        ? formatValue(m.key, r.values[m.key], 1)
+                                        : '–'}
+                                </td>
+                            ))}
                         </tr>
                     ))}
                 </tbody>

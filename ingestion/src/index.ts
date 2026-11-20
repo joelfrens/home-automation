@@ -1,10 +1,19 @@
 import { connect } from "mqtt";
 import { config } from "./config.js";
-import { insertReadings, pool } from "./db.js";
-import { ReadingPayload, parseTopic } from "./schema.js";
+import { insertMeasurements, pool } from "./db.js";
+import { toMeasurementRows } from "./measurements.js";
+import { type Reading, createValidator, loadSensorTypes, parseTopic } from "./schema.js";
 import { WriteBuffer } from "./buffer.js";
 
-const buffer = new WriteBuffer(insertReadings, config.maxBuffer, config.retryMs);
+const sensorTypes = loadSensorTypes(config.sensorTypesPath);
+const validate = createValidator(sensorTypes);
+console.log(`[app] sensor types: ${Object.keys(sensorTypes).join(", ")} (from ${config.sensorTypesPath})`);
+
+const buffer = new WriteBuffer<Reading>(
+  (readings) => insertMeasurements(toMeasurementRows(readings, sensorTypes)),
+  config.maxBuffer,
+  config.retryMs,
+);
 let received = 0;
 let rejected = 0;
 
@@ -43,20 +52,21 @@ client.on("message", (topic, payload) => {
     return;
   }
 
-  const result = ReadingPayload.safeParse(json);
-  if (!result.success) {
+  const result = validate(source.sensor, json);
+  if (!result.ok) {
     rejected++;
-    const why = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
-    console.warn(`[validate] ${topic}: rejected (${why})`);
+    console.warn(`[validate] ${topic}: rejected (${result.reason})`);
     return;
   }
 
-  const r = result.data;
+  const metrics = sensorTypes[source.sensor].metrics;
   console.log(
-    `[reading] ${source.room}: ${r.temperature.toFixed(2)} °C  ` +
-      `${r.humidity.toFixed(2)} %  ${r.pressure.toFixed(2)} hPa`,
+    `[reading] ${source.room}/${source.sensor}: ` +
+      Object.entries(result.values)
+        .map(([metric, value]) => `${value.toFixed(2)} ${metrics[metric].unit}`)
+        .join("  "),
   );
-  buffer.push({ ...r, ...source, recordedAt: new Date() });
+  buffer.push({ ...source, recordedAt: new Date(), values: result.values });
 });
 
 const statsTimer = setInterval(() => {

@@ -27,16 +27,19 @@ Development can use simulated readings; physical sensors run alongside.
       LED: blue = connecting, short green blink every 5 s = sent, red (stays on) = problem
 - [x] docker-compose.yml: Mosquitto :1883, PostgreSQL 17 :5433 (host port; 5432 is taken by Homebrew Postgres), Grafana :3001 (admin/admin)
       DB: user home / password home_dev_password / database home
-      Table sensor_readings(id, room, sensor, temperature_c, humidity_pct, pressure_hpa, recorded_at)
-      Created by db/init.sql (Laravel migrations should take ownership later)
-- [x] ingestion/ (TypeScript, ESM, NodeNext): subscribes home/+/bme280, validates with Zod,
+      Table measurements(id, recorded_at timestamptz(3), room, sensor, metric, value, unit): one row
+      per metric per message ("narrow" table). Created by Laravel migrations (sensors package);
+      db/init.sql removed. Fresh setup: docker compose up -d, then
+      docker compose exec web php artisan migrate (and db:seed), THEN start ingestion.
+- [x] ingestion/ (TypeScript, ESM, NodeNext): subscribes home/+/+, validates with Zod schemas built
+      from packages/sensors/sensor-types.json (unknown sensor types rejected + logged),
       buffers in memory and batch-inserts to Postgres, retries if DB is down, drops oldest
       when buffer is full, graceful shutdown. npm run dev / npm run simulate
-      Tests: ingestion/test/ (Vitest 4, 41 unit tests for schema + buffer, fake timers, no infra). npm test
+      Tests: ingestion/test/ (Vitest 4, 47 unit tests: topic, registry, validation, rows, buffer). npm test
       Deps: zod 4.6.7 (upgraded from 3 for GHSA-mrhx-c7xc-m3w5). Known dev-only advisory: picomatch
       via vite/vitest, no fix yet; npm audit fix --force suggests downgrading vitest, do NOT do that.
 - [x] Grafana dashboards (provisioned from grafana/provisioning/dashboards/files/)
-- [ ] Laravel + React app in web/ (IN PROGRESS – Stage 1 done)
+- [ ] Laravel + React app in web/ (IN PROGRESS – app, login, dashboard page done)
       Laravel 13, React starter kit (Inertia 3, React 19, Tailwind 4, Wayfinder, Pest), runs in Docker
       (NOT Sail, NOT Herd): web/Dockerfile (FrankenPHP; "dev" stage adds Node because Vite's Wayfinder
       plugin runs php artisan). Services: web http://localhost:8000, vite :5173 (same home-web image).
@@ -49,10 +52,11 @@ Development can use simulated readings; physical sensors run alongside.
       phpunit <env> did not override them. Fixed: phpunit.xml forces <server>+<env> DB_* to in-memory
       SQLite, and tests/TestCase.php setUpTraits() refuses any other database. Never weaken either;
       take a pg_dump before anything that could drop tables.
-      Next: decide readings storage (generic measurements table vs keep sensor_readings) and how
-      Laravel learns about readings (php artisan mqtt:listen vs ingestion -> Reverb), then dashboard
-      page, then Reverb (public channel, then private), then CI job + docs. Laravel later publishes
-      MQTT commands to devices. web/.github/workflows/tests.yml does not run (not at repo root).
+      Dashboard (/dashboard): room cards, history chart (6h/24h/7d), recent table; metric-driven
+      (labels/units from the registry), polls every 10 s via Inertia usePoll (Reverb replaces it).
+      Next: decide how Laravel learns about readings (php artisan mqtt:listen vs ingestion -> Reverb),
+      then Reverb (public channel, then private), then CI jobs (Laravel + package tests) + docs.
+      web/.github/workflows/tests.yml does not run (not at repo root).
 - [ ] AI features
 - [ ] Deploy to Raspberry Pi 5 (Docker, systemd, Chromium kiosk mode on its screen)
 - [ ] Push to GitHub with README, diagram and photos
@@ -62,13 +66,11 @@ Development can use simulated readings; physical sensors run alongside.
       Keep Partition Scheme "Default 4MB with spiffs" (OTA-capable; NOT "Huge APP (no OTA)").
       Stage 2 (with Laravel/MQTT command path): device pulls signed .bin over HTTP when sent an
       MQTT command (e.g. home/<room>/<sensor>/cmd), reports new version; fleet update from web app.
-- [ ] Multi-sensor ingestion (later): water level, air quality, etc.
-      Only schema.ts (fixed BME280 payload) and sensor_readings/db.ts (fixed columns) are
-      BME280-specific; MQTT, buffer, retry, shutdown are generic and reusable.
-      Proposed: per-sensor-type Zod registry keyed by the topic's <sensor> segment (unknown types
-      rejected + logged) and a generic narrow table measurements(time, room, sensor, metric,
-      value, unit). Decide before Laravel migrations take ownership of the schema. Not yet agreed
-      with owner – confirm storage design first.
+- [x] Multi-sensor storage: generic measurements table + sensor-types.json registry (agreed 2026-11-19).
+      Add a sensor type = add it to packages/sensors/sensor-types.json + firmware; no schema change.
+- [ ] More packages (agreed split): joelfrens/home-automation-switches (lights/relays/plugs: state +
+      on/off commands, separate from sensors on purpose) and joelfrens/home-automation-mqtt (shared
+      broker connection used by both). Later candidates: owntone (music), ai (Ollama), alerts.
 - [ ] Music in the dashboard (later, with Pi deployment)
       Speaker: Apple HomePod mini – AirPlay 2 only (no AUX; Bluetooth is setup-only).
       Plan: OwnTone in docker-compose (network_mode: host for mDNS discovery) streams to the
@@ -101,11 +103,18 @@ Development can use simulated readings; physical sensors run alongside.
 - Laravel tests: docker compose exec web php artisan test   (in-memory SQLite, never the real db)
 - React type check: docker compose exec vite npm run types:check
 - Back up the db: docker compose exec -T postgres pg_dump -U home home > backup.sql
-- Latest rows: docker exec -it home-postgres psql -U home -c "SELECT * FROM sensor_readings ORDER BY recorded_at DESC LIMIT 5;"
+- Package tests: docker compose exec -w /packages/sensors web sh -c "composer install && vendor/bin/phpunit"
+- Latest rows: docker exec -it home-postgres psql -U home -c "SELECT * FROM measurements ORDER BY id DESC LIMIT 6;"
 
 ## Conventions
+- Packages: non-UI logic goes in Composer packages under packages/<name> (PHP, name
+  joelfrens/home-automation-<name>, namespace Joelfrens\HomeAutomation\<Name>, auto-discovered
+  ServiceProvider, own Testbench tests with the in-memory-SQLite guard). UI (React pages,
+  routes, controllers) stays in web/. Installed via path repository ../packages/* (symlink);
+  packages/ is mounted at /packages in the web and vite containers.
 - Room/sensor names: lowercase letters, numbers and dashes only
 - Mosquitto allows anonymous access: development only, add auth before exposing beyond LAN
 - Keep docker-compose portable so the same stack runs on the Pi 5
 - Git: Claude may commit when asked but must NEVER run git push. The owner pushes manually
   (remote: https://github.com/joelfrens/home-automation, branch main)
+- Commits and PRs: no Co-Authored-By / Claude attribution lines (owner removed them from history 2026-11-20)
