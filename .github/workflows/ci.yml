@@ -1,0 +1,167 @@
+# Runs on every push and pull request. Each job checks one part of the system.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch: # allows a manual run from the Actions tab
+
+permissions:
+  contents: read
+
+# A new push to the same branch cancels the run still in progress for it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ingestion:
+    name: Ingestion (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    defaults:
+      run:
+        working-directory: ingestion
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: ingestion/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+  web:
+    name: Web app (Laravel + React)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+          coverage: none
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # Also installs packages/sensors through the path repository (../packages/*).
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Prepare .env
+        run: cp .env.example .env && php artisan key:generate
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      # The Wayfinder Vite plugin generates the typed route files that type-checking needs.
+      - name: Build frontend
+        run: npm run build
+
+      - name: Lint and format check (JS/TS)
+        run: npm run check
+
+      - name: Type-check (TS)
+        run: npm run types:check
+
+      - name: Code style (Pint)
+        run: vendor/bin/pint --test
+
+      - name: Static analysis (PHPStan)
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
+      # phpunit.xml forces in-memory SQLite; tests/TestCase.php refuses any other database.
+      - name: Tests (Pest)
+        run: php artisan test
+
+  sensors:
+    name: Sensors package (PHP)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/sensors
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+          coverage: none
+
+      # No composer.lock for packages (like any library): tests run against the newest allowed versions.
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Tests (PHPUnit + Testbench, in-memory SQLite)
+        run: vendor/bin/phpunit
+
+  firmware:
+    name: Firmware (ESP32 compile)
+    runs-on: ubuntu-latest
+    env:
+      SKETCH: firmware/atom_bme280_mqtt
+      FQBN: esp32:esp32:esp32 # "ESP32 Dev Module"
+      ESP32_CORE: "3.3.12"
+      ESP32_INDEX: https://espressif.github.io/arduino-esp32/package_esp32_index.json
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The ESP32 toolchain is several hundred MB; cache it between runs.
+      - name: Cache Arduino core and libraries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.arduino15
+            ~/Arduino/libraries
+          key: arduino-esp32-${{ env.ESP32_CORE }}-v1
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Install ESP32 core and libraries
+        run: |
+          arduino-cli core update-index --additional-urls "$ESP32_INDEX"
+          arduino-cli core install "esp32:esp32@$ESP32_CORE" --additional-urls "$ESP32_INDEX"
+          arduino-cli lib install "Adafruit BME280 Library@2.3.0" "PubSubClient@2.8"
+
+      # Real credentials are never in the repo; compile with the placeholder values.
+      - name: Create placeholder secrets.h
+        run: cp "$SKETCH/secrets.example.h" "$SKETCH/secrets.h"
+
+      - name: Compile sketch
+        run: arduino-cli compile --fqbn "$FQBN" --warnings default "$SKETCH"
+
+  compose:
+    name: Docker Compose config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate docker-compose.yml
+        run: docker compose config --quiet
