@@ -1,3 +1,19 @@
+# Settings shared by every container that runs the Laravel app (web, reverb, mqtt-listener).
+# Inside Docker, other services are reached by service name. These override web/.env
+# (which keeps localhost addresses for artisan commands run directly on the Mac).
+x-laravel-env: &laravel-env
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_DATABASE: home
+  DB_USERNAME: home
+  DB_PASSWORD: home_dev_password
+  MQTT_HOST: mosquitto
+  MQTT_PORT: "1883"
+  REVERB_HOST: reverb             # where Laravel sends broadcasts (the browser uses the page's host instead)
+  REVERB_PORT: "8080"
+  REVERB_SCHEME: http
+
 services:
   mosquitto:
     image: eclipse-mosquitto:2
@@ -64,15 +80,8 @@ services:
     ports:
       - "8000:80"
     environment:
+      <<: *laravel-env
       SERVER_NAME: ":80"          # FrankenPHP: plain HTTP on port 80 inside the container
-      # Inside Docker, reach Postgres by service name. These override web/.env
-      # (which keeps localhost:5433 for artisan commands run directly on the Mac).
-      DB_CONNECTION: pgsql
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_DATABASE: home
-      DB_USERNAME: home
-      DB_PASSWORD: home_dev_password
     volumes:
       - ./web:/app                # live code from the Mac, no rebuild needed when editing
       - ./packages:/packages      # our Composer packages (web/composer.json: path repository ../packages/*)
@@ -97,6 +106,39 @@ services:
     healthcheck:
       disable: true               # the image's built-in check is for the PHP web server, which this container doesn't run
     restart: unless-stopped
+
+  reverb:   # WebSocket server: pushes broadcasts (e.g. new readings) to open dashboards
+    image: home-web               # same Laravel code, different command
+    container_name: home-reverb
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    ports:
+      - "8080:8080"               # browsers connect to ws://<this machine>:8080
+    environment:
+      <<: *laravel-env
+    volumes:
+      - ./web:/app
+      - ./packages:/packages
+    depends_on:
+      - web
+    healthcheck:
+      disable: true               # the image's built-in check is for the PHP web server
+    restart: unless-stopped
+
+  mqtt-listener:   # php artisan mqtt:listen: MQTT message -> validate -> broadcast via Reverb
+    image: home-web
+    container_name: home-mqtt-listener
+    command: php artisan mqtt:listen
+    environment:
+      <<: *laravel-env
+    volumes:
+      - ./web:/app
+      - ./packages:/packages
+    depends_on:
+      - mosquitto
+      - reverb
+    healthcheck:
+      disable: true
+    restart: unless-stopped     # also covers "broker not up yet" at start: it exits, Docker retries
 
 volumes:
   web-node-modules:

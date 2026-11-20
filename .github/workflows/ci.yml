@@ -100,12 +100,16 @@ jobs:
       - name: Tests (Pest)
         run: php artisan test
 
-  sensors:
-    name: Sensors package (PHP)
+  packages:
+    name: Package ${{ matrix.package }} (PHP)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [sensors, mqtt]
     defaults:
       run:
-        working-directory: packages/sensors
+        working-directory: packages/${{ matrix.package }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -119,7 +123,7 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
-      - name: Tests (PHPUnit + Testbench, in-memory SQLite)
+      - name: Tests (PHPUnit + Testbench)
         run: vendor/bin/phpunit
 
   firmware:

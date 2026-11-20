@@ -11,6 +11,7 @@ the results.
 | `sensor-types.json` | Registry of sensor types → metrics (label, unit, valid min/max). Also read by the Node ingestion service to validate MQTT payloads, so both sides agree. |
 | `SensorTypes` | Loads and queries the registry (`has()`, `metric()`, `metrics()`). |
 | `SensorReadings` | `latestPerRoom()`, `history(Range)` (time-bucketed averages), `recent($limit)`. Returns plain arrays. |
+| `SensorMessage` | `parse($topic, $payload)` → `{room, sensor, values}` or throws `InvalidSensorMessage` with the reason. Same rules as ingestion (topic pattern, known type, every metric a number in range, extras dropped). Used to broadcast live readings. |
 | `Range` | `6h` / `24h` / `7d` with bucket sizes; `Range::fromQuery()` falls back to 24h. |
 | `Models\Measurement` | Eloquent model for `measurements`. |
 | Migration | `measurements(id, recorded_at, room, sensor, metric, value, unit)`, one row per metric per message. |

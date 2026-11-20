@@ -58,7 +58,7 @@ class SensorReadings
     /**
      * Averages per room, metric and time bucket over the given range (for charts), oldest first.
      *
-     * @return list<array{room: string, metric: string, t: int, value: float}>  t = bucket start in milliseconds (JavaScript time)
+     * @return list<array{room: string, metric: string, t: int, value: float}> t = bucket start in milliseconds (JavaScript time)
      */
     public function history(Range $range): array
     {
