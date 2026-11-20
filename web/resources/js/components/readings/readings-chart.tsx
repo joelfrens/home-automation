@@ -9,14 +9,8 @@ import {
     XAxis,
     YAxis,
 } from 'recharts';
-import { roomLabel } from '@/components/readings/room-card';
-import type { HistoryPoint, Metric, Range } from '@/types';
-
-export const METRICS: Record<Metric, { label: string; unit: string }> = {
-    temperature: { label: 'Temperature', unit: '°C' },
-    humidity: { label: 'Humidity', unit: '%' },
-    pressure: { label: 'Pressure', unit: 'hPa' },
-};
+import { formatValue, roomLabel } from '@/components/readings/metric-format';
+import type { HistoryPoint, MetricDefinition, Range } from '@/types';
 
 // Theme colours defined in resources/css/app.css (they adapt to light/dark mode)
 const COLORS = [
@@ -30,14 +24,19 @@ const COLORS = [
 /**
  * Recharts wants one object per point in time with one key per line:
  *   [{ t: 1795113600000, kitchen: 21.4, bedroom: 19.8 }, ...]
- * The server sends one row per room per time bucket, so regroup ("pivot") them.
+ * The server sends one row per room, metric and time bucket, so keep the chosen
+ * metric and regroup ("pivot") by time.
  */
-function pivot(history: HistoryPoint[], metric: Metric) {
+function pivot(history: HistoryPoint[], metric: string) {
     const byTime = new Map<number, Record<string, number>>();
 
     for (const point of history) {
+        if (point.metric !== metric) {
+            continue;
+        }
+
         const row = byTime.get(point.t) ?? { t: point.t };
-        row[point.room] = point[metric];
+        row[point.room] = point.value;
         byTime.set(point.t, row);
     }
 
@@ -50,15 +49,32 @@ export function ReadingsChart({
     range,
 }: {
     history: HistoryPoint[];
-    metric: Metric;
+    metric: MetricDefinition;
     range: Range;
 }) {
-    const data = useMemo(() => pivot(history, metric), [history, metric]);
-    const rooms = useMemo(
-        () => [...new Set(history.map((p) => p.room))].sort(),
-        [history],
+    const data = useMemo(
+        () => pivot(history, metric.key),
+        [history, metric.key],
     );
-    const { unit } = METRICS[metric];
+    const rooms = useMemo(
+        () =>
+            [
+                ...new Set(
+                    history
+                        .filter((p) => p.metric === metric.key)
+                        .map((p) => p.room),
+                ),
+            ].sort(),
+        [history, metric.key],
+    );
+
+    if (data.length === 0) {
+        return (
+            <p className="py-16 text-center text-sm text-muted-foreground">
+                No {metric.label.toLowerCase()} readings in the last {range}.
+            </p>
+        );
+    }
 
     const formatTick = (t: number) =>
         new Date(t).toLocaleString(undefined, {
@@ -86,7 +102,6 @@ export function ReadingsChart({
                 />
                 <YAxis
                     domain={['auto', 'auto']}
-                    tickFormatter={(v: number) => `${v}${unit === '%' ? '%' : ''}`}
                     tick={{ fontSize: 12, fill: 'currentColor' }}
                     className="text-muted-foreground"
                     width={48}
@@ -100,7 +115,7 @@ export function ReadingsChart({
                         })
                     }
                     formatter={(value, name) => [
-                        `${Number(value).toFixed(metric === 'pressure' ? 1 : 2)} ${unit}`,
+                        `${formatValue(metric.key, Number(value), 1)} ${metric.unit}`,
                         roomLabel(String(name)),
                     ]}
                     contentStyle={{

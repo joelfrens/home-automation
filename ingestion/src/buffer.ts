@@ -1,22 +1,22 @@
-import type { Reading } from "./schema.js";
-
-type Writer = (rows: Reading[]) => Promise<void>;
+/** Saves a batch of items (e.g. inserts them into the database). */
+type Writer<T> = (rows: T[]) => Promise<void>;
 
 /**
  * Decouples receiving from storing.
  * MQTT messages are pushed in instantly; a background loop writes them to the
  * database in batches. If the database is unavailable, readings stay queued
  * and are retried, so nothing is lost during a short outage.
+ * Generic: T is whatever is being stored (here: one validated MQTT message, a Reading).
  */
-export class WriteBuffer {
-  private queue: Reading[] = [];
+export class WriteBuffer<T> {
+  private queue: T[] = [];
   private writing = false;
   private retryTimer?: NodeJS.Timeout;
   stored = 0;
   dropped = 0;
 
   constructor(
-    private readonly write: Writer,
+    private readonly write: Writer<T>,
     private readonly maxSize: number,
     private readonly retryMs: number,
     private readonly batchSize = 500,
@@ -26,8 +26,8 @@ export class WriteBuffer {
     return this.queue.length;
   }
 
-  push(reading: Reading): void {
-    this.queue.push(reading);
+  push(item: T): void {
+    this.queue.push(item);
     this.trim();
     void this.flush();
   }

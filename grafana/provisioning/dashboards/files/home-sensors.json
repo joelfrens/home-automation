@@ -14,8 +14,8 @@
         "label": "Room",
         "type": "query",
         "datasource": { "type": "grafana-postgresql-datasource", "uid": "home-postgres" },
-        "query": "SELECT DISTINCT room FROM sensor_readings ORDER BY room",
-        "definition": "SELECT DISTINCT room FROM sensor_readings ORDER BY room",
+        "query": "SELECT DISTINCT room FROM measurements WHERE recorded_at > now() - interval '30 days' ORDER BY room",
+        "definition": "SELECT DISTINCT room FROM measurements WHERE recorded_at > now() - interval '30 days' ORDER BY room",
         "refresh": 2,
         "multi": true,
         "includeAll": true,
@@ -36,7 +36,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT DISTINCT ON (room) room, temperature_c AS value\nFROM sensor_readings\nWHERE room IN ($room)\nORDER BY room, recorded_at DESC"
+          "rawSql": "SELECT DISTINCT ON (room) room, value\nFROM measurements\nWHERE metric = 'temperature' AND room IN ($room)\nORDER BY room, recorded_at DESC"
         }
       ],
       "options": {
@@ -76,7 +76,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT DISTINCT ON (room) room, humidity_pct AS value\nFROM sensor_readings\nWHERE room IN ($room)\nORDER BY room, recorded_at DESC"
+          "rawSql": "SELECT DISTINCT ON (room) room, value\nFROM measurements\nWHERE metric = 'humidity' AND room IN ($room)\nORDER BY room, recorded_at DESC"
         }
       ],
       "options": {
@@ -116,7 +116,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT DISTINCT ON (room) room, pressure_hpa AS value\nFROM sensor_readings\nWHERE room IN ($room)\nORDER BY room, recorded_at DESC"
+          "rawSql": "SELECT DISTINCT ON (room) room, value\nFROM measurements\nWHERE metric = 'pressure' AND room IN ($room)\nORDER BY room, recorded_at DESC"
         }
       ],
       "options": {
@@ -147,7 +147,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT room, EXTRACT(EPOCH FROM now() - max(recorded_at)) AS value\nFROM sensor_readings\nWHERE room IN ($room)\nGROUP BY room\nORDER BY room"
+          "rawSql": "SELECT room, EXTRACT(EPOCH FROM now() - max(recorded_at)) AS value\nFROM measurements\nWHERE room IN ($room) AND recorded_at > now() - interval '30 days'\nGROUP BY room\nORDER BY room"
         }
       ],
       "options": {
@@ -185,7 +185,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT $__timeGroupAlias(recorded_at, $__interval), room AS metric, avg(temperature_c) AS value\nFROM sensor_readings\nWHERE $__timeFilter(recorded_at) AND room IN ($room)\nGROUP BY 1, room\nORDER BY 1"
+          "rawSql": "SELECT $__timeGroupAlias(recorded_at, $__interval), room AS metric, avg(value) AS value\nFROM measurements\nWHERE $__timeFilter(recorded_at) AND metric = 'temperature' AND room IN ($room)\nGROUP BY 1, room\nORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -210,7 +210,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT $__timeGroupAlias(recorded_at, $__interval), room AS metric, avg(humidity_pct) AS value\nFROM sensor_readings\nWHERE $__timeFilter(recorded_at) AND room IN ($room)\nGROUP BY 1, room\nORDER BY 1"
+          "rawSql": "SELECT $__timeGroupAlias(recorded_at, $__interval), room AS metric, avg(value) AS value\nFROM measurements\nWHERE $__timeFilter(recorded_at) AND metric = 'humidity' AND room IN ($room)\nGROUP BY 1, room\nORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -235,7 +235,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT $__timeGroupAlias(recorded_at, $__interval), room AS metric, avg(pressure_hpa) AS value\nFROM sensor_readings\nWHERE $__timeFilter(recorded_at) AND room IN ($room)\nGROUP BY 1, room\nORDER BY 1"
+          "rawSql": "SELECT $__timeGroupAlias(recorded_at, $__interval), room AS metric, avg(value) AS value\nFROM measurements\nWHERE $__timeFilter(recorded_at) AND metric = 'pressure' AND room IN ($room)\nGROUP BY 1, room\nORDER BY 1"
         }
       ],
       "fieldConfig": {
