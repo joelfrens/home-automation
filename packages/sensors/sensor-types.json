@@ -1,0 +1,10 @@
+{
+    "bme280": {
+        "label": "BME280",
+        "metrics": {
+            "temperature": { "label": "Temperature", "unit": "°C", "min": -40, "max": 85 },
+            "humidity": { "label": "Humidity", "unit": "%", "min": 0, "max": 100 },
+            "pressure": { "label": "Pressure", "unit": "hPa", "min": 300, "max": 1100 }
+        }
+    }
+}

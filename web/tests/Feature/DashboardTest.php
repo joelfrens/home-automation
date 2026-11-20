@@ -2,12 +2,16 @@
 
 namespace Tests\Feature;
 
-use App\Models\SensorReading;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
+use Joelfrens\HomeAutomation\Sensors\Database\Factories\MeasurementFactory;
 use Tests\TestCase;
 
+/**
+ * Page-level tests only. The data logic (latest, history averaging, ranges) is tested
+ * in the sensors package itself: packages/sensors/tests.
+ */
 class DashboardTest extends TestCase
 {
     use RefreshDatabase;
@@ -15,7 +19,7 @@ class DashboardTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->freezeTime(); // "now" stays fixed, so time ranges are predictable
+        $this->freezeTime();
     }
 
     public function test_guests_are_redirected_to_the_login_page()
@@ -23,7 +27,7 @@ class DashboardTest extends TestCase
         $this->get(route('dashboard'))->assertRedirect(route('login'));
     }
 
-    public function test_empty_dashboard_renders_without_readings()
+    public function test_empty_dashboard_renders_with_metric_definitions()
     {
         $this->actingAs(User::factory()->create())
             ->get(route('dashboard'))
@@ -31,71 +35,43 @@ class DashboardTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('dashboard')
                 ->where('range', '24h')
+                ->where('metrics.0', ['key' => 'temperature', 'label' => 'Temperature', 'unit' => '°C'])
+                ->has('metrics', 3)
+                ->where('thresholds.staleAfterSeconds', 30)
                 ->has('latest', 0)
                 ->has('history', 0)
                 ->has('recent', 0));
     }
 
-    public function test_cards_show_the_newest_reading_of_each_room()
+    public function test_dashboard_shows_data_from_the_sensors_package()
     {
-        SensorReading::factory()->create(['room' => 'kitchen', 'temperature_c' => 18, 'recorded_at' => now()->subMinutes(10)]);
-        SensorReading::factory()->create(['room' => 'kitchen', 'temperature_c' => 21.5, 'recorded_at' => now()->subSeconds(5)]);
-        SensorReading::factory()->create(['room' => 'bedroom', 'temperature_c' => 19, 'recorded_at' => now()->subSeconds(3)]);
+        MeasurementFactory::message('kitchen', now()->subSeconds(5), ['temperature' => 21.5, 'humidity' => 45, 'pressure' => 1001]);
 
         $this->actingAs(User::factory()->create())
             ->get(route('dashboard'))
             ->assertInertia(fn (Assert $page) => $page
-                ->has('latest', 2)
-                ->where('latest.0.room', 'bedroom') // sorted by room name
-                ->where('latest.1.room', 'kitchen')
-                ->where('latest.1.temperature', 21.5)
-                ->has('recent', 3));
+                ->has('latest', 1)
+                ->where('latest.0.room', 'kitchen')
+                ->where('latest.0.values.temperature', 21.5)
+                ->has('history', 3) // one point per metric
+                ->has('recent', 1));
     }
 
-    public function test_history_averages_readings_into_time_buckets()
+    public function test_range_comes_from_the_query_string()
     {
-        // 24h range uses 5-minute buckets. Two readings in the same bucket are averaged.
-        $bucketStart = now()->subHour()->startOfHour();
-        SensorReading::factory()->create(['temperature_c' => 20, 'humidity_pct' => 40, 'recorded_at' => $bucketStart->copy()->addSeconds(10)]);
-        SensorReading::factory()->create(['temperature_c' => 22, 'humidity_pct' => 50, 'recorded_at' => $bucketStart->copy()->addSeconds(200)]);
-        // A later bucket
-        SensorReading::factory()->create(['temperature_c' => 25, 'recorded_at' => $bucketStart->copy()->addMinutes(10)]);
-
         $this->actingAs(User::factory()->create())
-            ->get(route('dashboard'))
-            ->assertInertia(fn (Assert $page) => $page
-                ->has('history', 2)
-                ->where('history.0.t', $bucketStart->getTimestamp() * 1000)
-                ->where('history.0.temperature', 21)
-                ->where('history.0.humidity', 45)
-                ->where('history.1.temperature', 25));
+            ->get('/dashboard?range=6h')
+            ->assertInertia(fn (Assert $page) => $page->where('range', '6h'));
     }
 
-    public function test_history_only_includes_the_selected_range()
+    public function test_unknown_or_odd_range_falls_back_to_24_hours()
     {
-        SensorReading::factory()->create(['recorded_at' => now()->subHours(2)]);
-        SensorReading::factory()->create(['recorded_at' => now()->subHours(12)]);
-        SensorReading::factory()->create(['recorded_at' => now()->subDays(3)]);
-
         $user = User::factory()->create();
 
-        $this->actingAs($user)->get(route('dashboard', ['range' => '6h']))
-            ->assertInertia(fn (Assert $page) => $page->where('range', '6h')->has('history', 1));
-
-        $this->actingAs($user)->get(route('dashboard', ['range' => '24h']))
-            ->assertInertia(fn (Assert $page) => $page->has('history', 2));
-
-        $this->actingAs($user)->get(route('dashboard', ['range' => '7d']))
-            ->assertInertia(fn (Assert $page) => $page->has('history', 3));
-    }
-
-    public function test_unknown_range_falls_back_to_24_hours()
-    {
-        $this->actingAs(User::factory()->create())
-            ->get('/dashboard?range=forever')
+        $this->actingAs($user)->get('/dashboard?range=forever')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page->where('range', '24h'));
 
-        $this->get('/dashboard?range[]=6h')->assertOk(); // odd input must not crash
+        $this->actingAs($user)->get('/dashboard?range[]=6h')->assertOk();
     }
 }

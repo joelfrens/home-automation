@@ -1,36 +1,36 @@
-import { Droplets, Gauge, Thermometer } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    formatValue,
+    metricIcon,
+    roomLabel,
+} from '@/components/readings/metric-format';
 import { timeAgo } from '@/hooks/use-now';
 import { cn } from '@/lib/utils';
-import type { Reading } from '@/types';
-
-// A sensor sends every 5 s; same thresholds as the Grafana "seconds since last reading" panel.
-const STALE_AFTER_S = 30;
-const OFFLINE_AFTER_S = 300;
-
-/** "living-room" → "Living room" */
-export function roomLabel(room: string): string {
-    const words = room.replace(/-/g, ' ');
-
-    return words.charAt(0).toUpperCase() + words.slice(1);
-}
+import type { MetricDefinition, Reading, Thresholds } from '@/types';
 
 export function RoomCard({
     reading,
+    metrics,
+    thresholds,
     now,
 }: {
     reading: Reading;
+    metrics: MetricDefinition[];
+    thresholds: Thresholds;
     now: number | null;
 }) {
     const ageS =
         now === null ? 0 : (now - Date.parse(reading.recordedAt)) / 1000;
     const status =
-        ageS > OFFLINE_AFTER_S
+        ageS > thresholds.offlineAfterSeconds
             ? 'offline'
-            : ageS > STALE_AFTER_S
+            : ageS > thresholds.staleAfterSeconds
               ? 'stale'
               : 'live';
+
+    // Show the metrics this sensor actually sent, in the registry's order
+    const shown = metrics.filter((m) => m.key in reading.values);
 
     return (
         <Card className="gap-4">
@@ -51,52 +51,28 @@ export function RoomCard({
                 </Badge>
             </CardHeader>
             <CardContent className="grid grid-cols-3 gap-2">
-                <Value
-                    icon={Thermometer}
-                    label="Temperature"
-                    value={reading.temperature.toFixed(1)}
-                    unit="°C"
-                />
-                <Value
-                    icon={Droplets}
-                    label="Humidity"
-                    value={reading.humidity.toFixed(0)}
-                    unit="%"
-                />
-                <Value
-                    icon={Gauge}
-                    label="Pressure"
-                    value={reading.pressure.toFixed(0)}
-                    unit="hPa"
-                />
+                {shown.map((metric) => {
+                    const Icon = metricIcon(metric.key);
+
+                    return (
+                        <div key={metric.key} className="flex flex-col gap-1">
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Icon className="size-3.5" />
+                                {metric.label}
+                            </span>
+                            <span className="text-2xl font-semibold tabular-nums">
+                                {formatValue(
+                                    metric.key,
+                                    reading.values[metric.key],
+                                )}
+                                <span className="ml-0.5 text-sm font-normal text-muted-foreground">
+                                    {metric.unit}
+                                </span>
+                            </span>
+                        </div>
+                    );
+                })}
             </CardContent>
         </Card>
-    );
-}
-
-function Value({
-    icon: Icon,
-    label,
-    value,
-    unit,
-}: {
-    icon: typeof Thermometer;
-    label: string;
-    value: string;
-    unit: string;
-}) {
-    return (
-        <div className="flex flex-col gap-1">
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Icon className="size-3.5" />
-                {label}
-            </span>
-            <span className="text-2xl font-semibold tabular-nums">
-                {value}
-                <span className="ml-0.5 text-sm font-normal text-muted-foreground">
-                    {unit}
-                </span>
-            </span>
-        </div>
     );
 }

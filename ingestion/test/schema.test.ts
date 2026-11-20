@@ -1,5 +1,14 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ReadingPayload, parseTopic } from "../src/schema.js";
+import { config } from "../src/config.js";
+import { toMeasurementRows } from "../src/measurements.js";
+import { createValidator, loadSensorTypes, parseTopic } from "../src/schema.js";
+
+// The real registry shared with the Laravel sensors package
+const types = loadSensorTypes(config.sensorTypesPath);
+const validate = createValidator(types);
 
 describe("parseTopic", () => {
   it("extracts room and sensor from a valid topic", () => {
@@ -29,16 +38,38 @@ describe("parseTopic", () => {
   });
 });
 
-describe("ReadingPayload", () => {
+describe("sensor types registry", () => {
+  const writeTypes = (json: string) => {
+    const path = join(mkdtempSync(join(tmpdir(), "types-")), "sensor-types.json");
+    writeFileSync(path, json);
+    return path;
+  };
+
+  it("loads the shared file with the BME280 and its units", () => {
+    expect(types.bme280.metrics.humidity).toEqual({ label: "Humidity", unit: "%", min: 0, max: 100 });
+  });
+
+  it("rejects a metric without a unit", () => {
+    const path = writeTypes('{"x":{"label":"X","metrics":{"t":{"label":"T","min":0,"max":1}}}}');
+    expect(() => loadSensorTypes(path)).toThrow(/Invalid sensor types file/);
+  });
+
+  it("rejects a sensor type with no metrics", () => {
+    const path = writeTypes('{"x":{"label":"X","metrics":{}}}');
+    expect(() => loadSensorTypes(path)).toThrow(/at least one metric/);
+  });
+});
+
+describe("validating a BME280 message", () => {
   const valid = { temperature: 22.7, humidity: 40.09, pressure: 984.88 };
 
   it("accepts a normal reading", () => {
-    expect(ReadingPayload.safeParse(valid).success).toBe(true);
+    expect(validate("bme280", valid)).toEqual({ ok: true, values: valid });
   });
 
   it("accepts values exactly on the BME280's limits", () => {
-    expect(ReadingPayload.safeParse({ temperature: -40, humidity: 0, pressure: 300 }).success).toBe(true);
-    expect(ReadingPayload.safeParse({ temperature: 85, humidity: 100, pressure: 1100 }).success).toBe(true);
+    expect(validate("bme280", { temperature: -40, humidity: 0, pressure: 300 }).ok).toBe(true);
+    expect(validate("bme280", { temperature: 85, humidity: 100, pressure: 1100 }).ok).toBe(true);
   });
 
   it.each([
@@ -49,7 +80,7 @@ describe("ReadingPayload", () => {
     ["pressure too low", { ...valid, pressure: 299 }],
     ["pressure too high", { ...valid, pressure: 1101 }],
   ])("rejects a reading with %s", (_reason, payload) => {
-    expect(ReadingPayload.safeParse(payload).success).toBe(false);
+    expect(validate("bme280", payload).ok).toBe(false);
   });
 
   it.each([
@@ -60,18 +91,48 @@ describe("ReadingPayload", () => {
     ["an array", [22.7, 40.09, 984.88]],
     ["null", null],
   ])("rejects a payload with %s", (_reason, payload) => {
-    expect(ReadingPayload.safeParse(payload).success).toBe(false);
+    expect(validate("bme280", payload).ok).toBe(false);
   });
 
   it("reports which field was wrong", () => {
-    const result = ReadingPayload.safeParse({ ...valid, humidity: 150 });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues[0].path).toEqual(["humidity"]);
+    const result = validate("bme280", { ...valid, humidity: 150 });
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.reason).toMatch(/^humidity:/);
   });
 
   it("strips unknown extra fields instead of storing them", () => {
-    const result = ReadingPayload.safeParse({ ...valid, battery: 87 });
-    expect(result.success).toBe(true);
-    expect(result.data).toEqual(valid);
+    expect(validate("bme280", { ...valid, battery: 87 })).toEqual({ ok: true, values: valid });
+  });
+});
+
+describe("unknown sensor types", () => {
+  it("rejects a sensor type that is not in sensor-types.json", () => {
+    const result = validate("water-level", { level: 12 });
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.reason).toMatch(/unknown sensor type "water-level"/);
+  });
+
+  it("accepts a new type once it is added to the registry", () => {
+    const withWater = createValidator({
+      ...types,
+      "water-level": { label: "Water level", metrics: { level: { label: "Level", unit: "cm", min: 0, max: 300 } } },
+    });
+    expect(withWater("water-level", { level: 12 })).toEqual({ ok: true, values: { level: 12 } });
+    expect(withWater("water-level", { level: 301 }).ok).toBe(false);
+  });
+});
+
+describe("toMeasurementRows", () => {
+  it("turns one message into one row per metric, sharing the time, with units from the registry", () => {
+    const at = new Date("2026-11-19T18:00:00Z");
+    const rows = toMeasurementRows(
+      [{ room: "kitchen", sensor: "bme280", recordedAt: at, values: { temperature: 21.4, humidity: 45 } }],
+      types,
+    );
+
+    expect(rows).toEqual([
+      { recordedAt: at, room: "kitchen", sensor: "bme280", metric: "temperature", value: 21.4, unit: "°C" },
+      { recordedAt: at, room: "kitchen", sensor: "bme280", metric: "humidity", value: 45, unit: "%" },
+    ]);
   });
 });
