@@ -20,6 +20,10 @@ class SensorsServiceProvider extends ServiceProvider
             $app['config']->get('sensors.types_path'),
         ));
 
+        $this->app->singleton(SensorMessage::class, fn ($app) => new SensorMessage(
+            $app->make(SensorTypes::class),
+        ));
+
         $this->app->singleton(SensorReadings::class, fn ($app) => new SensorReadings(
             $app->make(SensorTypes::class),
             (int) $app['config']->get('sensors.latest_lookback_hours'),

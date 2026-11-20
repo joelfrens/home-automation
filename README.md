@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/joelfrens/home-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/joelfrens/home-automation/actions/workflows/ci.yml)
 
-End-to-end IoT telemetry pipeline: ESP32 sensor nodes publish environmental readings over MQTT; a TypeScript ingestion service validates and persists them to PostgreSQL; Grafana visualises them. Fully containerised, configuration-as-code, designed to run unchanged on a Raspberry Pi 5.
+End-to-end IoT telemetry pipeline: ESP32 sensor nodes publish environmental readings over MQTT; a TypeScript ingestion service validates and persists them to PostgreSQL; Grafana visualises them, and a Laravel + React dashboard shows them live over WebSockets (Laravel Reverb). Fully containerised, configuration-as-code, designed to run unchanged on a Raspberry Pi 5.
 
 <!-- TODO: add photos/screenshots, e.g.
 ![Sensor node](docs/images/sensor.jpg)
@@ -18,7 +18,12 @@ flowchart LR
     D --> E[Grafana]
     D --> G[Laravel + React dashboard]
     D --> F[Adminer]
+    B -->|home/+/+| H[mqtt:listen<br/>Laravel]
+    H -->|validated reading| R[Reverb]
+    R -->|WebSocket| G
 ```
+
+Two independent consumers share the broker: **ingestion** stores every reading, and Laravel's **`mqtt:listen`** validates the same messages and broadcasts them through **Reverb** (WebSocket server), so open dashboards update the instant a reading arrives. The database stays the source of truth: dashboards reload from it on (re)connect and fall back to polling if the WebSocket drops.
 
 | Layer | Technology | Location |
 |---|---|---|
@@ -27,6 +32,7 @@ flowchart LR
 | Ingestion | Node.js, TypeScript (ESM / NodeNext), mqtt.js, Zod 4, node-postgres, Vitest | `ingestion/` |
 | Storage | PostgreSQL 17, schema owned by Laravel migrations | `packages/sensors/`, `web/database/` |
 | Web app | Laravel 13, React 19 (Inertia 3), TypeScript, Tailwind 4, Recharts, FrankenPHP, Pest | `web/` |
+| Real-time | Laravel Reverb (WebSockets, Pusher protocol), Laravel Echo, php-mqtt/client | `packages/mqtt/`, `web/` |
 | Packages | Composer packages for non-UI logic, tested with Orchestra Testbench | `packages/` |
 | Visualisation | Grafana (provisioned datasource + dashboard), Adminer | `grafana/` |
 | Infrastructure | Docker Compose | `docker-compose.yml` |
@@ -38,6 +44,7 @@ flowchart LR
 - **Validation at the edge of the system.** Topics are parsed against `home/<room>/<sensor>` with a strict name pattern; payloads are validated with Zod schemas generated from a sensor-type registry (`packages/sensors/sensor-types.json`) using each sensor's physical operating ranges. Unknown sensor types and invalid messages are logged and counted, never stored.
 - **Generic, extensible storage.** One narrow `measurements` table (one row per metric per message) serves every sensor type; adding a sensor type is a registry entry, not a schema change. The same registry drives ingestion validation and the dashboard's labels and units.
 - **Modular backend.** Non-UI logic lives in Composer packages (`packages/`), auto-discovered by the Laravel host app via a path repository and tested in isolation with Orchestra Testbench; the host app owns only routes, controllers and React pages.
+- **Live dashboard without coupling.** The MQTT package only turns messages into Laravel events; the sensors package validates them with the same registry ingestion uses; a small listener in the host app broadcasts valid readings. If Reverb is down the listener logs and carries on; if the browser's socket drops it polls and catches up from the database on reconnect.
 - **Resilient firmware.** Non-blocking main loop (no `delay()` in steady state), automatic WiFi and MQTT reconnection, unique client ID derived from the chip's eFuse MAC, RGB LED status. Credentials are kept out of source control in an untracked `secrets.h`.
 - **Configuration as code.** Grafana's datasource (fixed UID) and dashboard are provisioned from the repo; the schema is applied by Laravel migrations; every runtime setting in the ingestion service is overridable by environment variable. A fresh `docker compose up` reproduces the full stack.
 - **Observability.** Periodic `[stats]` log line (received / stored / rejected / waiting / dropped) and a Grafana "seconds since last reading" panel per room that alerts visually after 30 s of silence.
@@ -50,8 +57,8 @@ flowchart LR
 ```bash
 git clone https://github.com/joelfrens/home-automation.git && cd home-automation
 
-# 1. Infrastructure + web app: Mosquitto, PostgreSQL, Grafana, Adminer, Laravel, Vite
-cp web/.env.example web/.env      # set ADMIN_PASSWORD, then: docker compose exec web php artisan key:generate
+# 1. Infrastructure + web app: Mosquitto, PostgreSQL, Grafana, Adminer, Laravel, Vite, Reverb, mqtt-listener
+cp web/.env.example web/.env      # set ADMIN_PASSWORD and REVERB_APP_KEY/SECRET, then: docker compose exec web php artisan key:generate
 docker compose up -d
 docker compose exec web composer install
 docker compose exec web php artisan migrate   # creates all tables, including measurements
@@ -72,6 +79,7 @@ ROOMS=office,garage INVALID_RATE=0.1 npm run simulate
 | Adminer | http://localhost:8081 (System: PostgreSQL, Server: `postgres`) | `home` / `home_dev_password` |
 | PostgreSQL | `localhost:5433` (container 5432) | `home` / `home_dev_password`, db `home` |
 | Mosquitto | `localhost:1883` | anonymous |
+| Reverb (WebSocket) | `ws://localhost:8080` | app key from `web/.env` |
 
 > PostgreSQL is mapped to host port **5433** to avoid colliding with a locally installed Postgres on 5432.
 
@@ -147,6 +155,7 @@ Scripts: `npm run dev` (tsx watch), `npm run build` + `npm start` (compiled), `n
 cd ingestion && npm test                                                               # 47 Vitest tests
 docker compose exec web php artisan test                                               # Laravel app (Pest/PHPUnit)
 docker compose exec -w /packages/sensors web sh -c "composer install && vendor/bin/phpunit"   # sensors package
+docker compose exec -w /packages/mqtt web sh -c "composer install && vendor/bin/phpunit"      # mqtt package
 ```
 
 All of these, plus linting, type checks, static analysis and an ESP32 firmware compile, run in GitHub Actions on every push ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
@@ -154,8 +163,9 @@ All of these, plus linting, type checks, static analysis and an ESP32 firmware c
 No test touches real infrastructure:
 
 - **Ingestion (Vitest).** Topic parsing, the sensor-type registry, payload validation generated from it (boundary values, wrong types, missing fields, unknown sensor types, extra fields stripped), message → measurement rows, and the write buffer (batching, retry without hammering, re-queue order, oldest-first drop, drain on shutdown) using a fake writer and Vitest fake timers. The buffer suite was mutation-checked.
-- **Sensors package (PHPUnit + Orchestra Testbench).** Registry loading and validation, ranges, latest-per-room, bucketed history averages, recent messages, on in-memory SQLite.
-- **Laravel app (Pest/PHPUnit).** Auth flows, disabled registration, dashboard page props.
+- **Sensors package (PHPUnit + Orchestra Testbench).** Registry loading and validation, MQTT message parsing (same rules as ingestion), ranges, latest-per-room, bucketed history averages, recent messages, on in-memory SQLite.
+- **MQTT package (PHPUnit + Testbench).** `mqtt:listen` subscriptions and event dispatch against a fake broker client, including a failing listener not stopping the loop.
+- **Laravel app (Pest/PHPUnit).** Auth flows, disabled registration, dashboard page props, MQTT message → broadcast (valid, invalid, Reverb down).
 - **Safety guard.** Both PHP suites force in-memory SQLite and refuse to run `RefreshDatabase` against any other database (added after a test run once wiped the development database).
 
 ### Repository layout
@@ -172,13 +182,14 @@ ingestion/src/
   simulator.ts                   Fake multi-room publisher with drift and invalid-message injection
 ingestion/test/                  Vitest unit tests
 packages/sensors/                joelfrens/home-automation-sensors: registry, Measurement model,
-                                 migration, SensorReadings queries, Testbench tests
+                                 migration, SensorReadings queries, SensorMessage parser, tests
+packages/mqtt/                   joelfrens/home-automation-mqtt: broker connection, mqtt:listen, tests
 web/                             Laravel 13 + React host app (Dockerfile, dashboard, auth)
 mosquitto/mosquitto.conf         Broker config
 grafana/provisioning/
   datasources/postgres.yml       Datasource (uid: home-postgres)
   dashboards/                    Provider + dashboard JSON
-docker-compose.yml               Mosquitto, PostgreSQL, Grafana, Adminer, web, vite
+docker-compose.yml               Mosquitto, PostgreSQL, Grafana, Adminer, web, vite, reverb, mqtt-listener
 ```
 
 ### Troubleshooting
@@ -189,13 +200,15 @@ docker-compose.yml               Mosquitto, PostgreSQL, Grafana, Adminer, web, v
 | Ingestion logs `database write failed` | Postgres not up, `measurements` not created yet (`docker compose exec web php artisan migrate`), or the client is hitting a different Postgres on 5432 — use 5433 |
 | Ingestion logs `unknown sensor type` | The topic's sensor segment is not in `packages/sensors/sensor-types.json`; add it and restart ingestion |
 | Dashboard page is blank | Vite (port 5173) not running, or the page is opened from another device (dev assets are served from `localhost:5173`) |
+| Dashboard badge says "Offline" | Reverb not running (`docker compose logs reverb`) or `VITE_REVERB_APP_KEY` doesn't match `REVERB_APP_KEY`; the page still refreshes every 10 s |
+| Badge "Live" but nothing updates | `docker compose logs mqtt-listener` (should show `Subscribed to home/+/+`); run it with `-v` to print every message |
 | Grafana rejects `admin`/`admin` | `GF_SECURITY_ADMIN_PASSWORD` only applies on first DB init: `docker exec home-grafana grafana cli admin reset-admin-password admin` |
 | Changing a provisioned datasource UID breaks Grafana startup | Add a one-off `deleteDatasources` entry for the old datasource, restart, then remove it |
 | Upload fails / no serial port | Use Upload Speed 115200 and a data-capable USB-C cable |
 
 ## Security
 
-Development configuration for a trusted LAN: Mosquitto accepts anonymous clients and all credentials in `docker-compose.yml` are defaults. Before exposing anything beyond the local network, enable Mosquitto authentication (and TLS), rotate the database and Grafana passwords, and move them into an untracked `.env`.
+Development configuration for a trusted LAN: Mosquitto accepts anonymous clients and all credentials in `docker-compose.yml` are defaults. Before exposing anything beyond the local network, enable Mosquitto authentication (and TLS), rotate the database and Grafana passwords, and move them into an untracked `.env`. The Reverb `readings` channel is currently public (any client with the app key can subscribe); switch it to a private channel before exposing port 8080.
 
 ## Roadmap
 
@@ -204,11 +217,12 @@ Development configuration for a trusted LAN: Mosquitto accepts anonymous clients
 - [x] TypeScript ingestion service with validation, batching and retry
 - [x] Grafana dashboard provisioned as code
 - [x] Laravel + React (Inertia) web app in Docker: login, sensor dashboard (cards, history chart, recent readings)
-- [ ] Live updates via Reverb; MQTT command path to devices (lights/switches) in a separate `switches` package
+- [x] Live dashboard updates via Reverb (public channel), Laravel MQTT listener in a separate `mqtt` package
+- [ ] Private channel (logged-in users only); MQTT command path to devices (lights/switches) in a `switches` package
 - [ ] AI features over the collected data
 - [ ] Deploy to Raspberry Pi 5: Docker, systemd for ingestion, Chromium kiosk on the attached display
 - [x] Unit tests for ingestion (validation, buffer retry/drop behaviour)
-- [x] CI with GitHub Actions on every push: ingestion (Node 22 & 24), Laravel app (lint, types, Pint, PHPStan, tests), sensors package tests, ESP32 firmware compile, Compose validation
+- [x] CI with GitHub Actions on every push: ingestion (Node 22 & 24), Laravel app (lint, types, Pint, PHPStan, tests), package tests (sensors, mqtt), ESP32 firmware compile, Compose validation
 - [ ] Node-side buffering with NTP timestamps to survive WiFi outages without data gaps
 - [ ] OTA firmware updates: ArduinoOTA for development, then MQTT-triggered HTTP OTA with signed images for fleet updates
 - [x] Generic `measurements` storage and sensor-type registry, ready for more sensor types (water level, air quality)
