@@ -1,20 +1,87 @@
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 
-// What a valid MQTT message from a BME280 sensor must look like.
-// Ranges are the BME280's physical operating limits.
-export const ReadingPayload = z.object({
-  temperature: z.number().min(-40).max(85),
-  humidity: z.number().min(0).max(100),
-  pressure: z.number().min(300).max(1100),
+// ---------- Sensor type registry ----------
+// Loaded from packages/sensors/sensor-types.json, the same file the Laravel sensors package
+// reads, so validation here and labels/units in the dashboard always agree.
+
+const MetricDefinition = z.object({
+  label: z.string(),
+  unit: z.string(),
+  min: z.number(),
+  max: z.number(),
 });
 
-export type ReadingPayload = z.infer<typeof ReadingPayload>;
+const SensorTypesFile = z.record(
+  z.string(),
+  z.object({
+    label: z.string(),
+    metrics: z
+      .record(z.string(), MetricDefinition)
+      .refine((m) => Object.keys(m).length > 0, "a sensor type needs at least one metric"),
+  }),
+);
 
-export interface Reading extends ReadingPayload {
+export type SensorTypes = z.infer<typeof SensorTypesFile>;
+
+export function loadSensorTypes(path: string): SensorTypes {
+  const json: unknown = JSON.parse(readFileSync(path, "utf8"));
+  const result = SensorTypesFile.safeParse(json);
+  if (!result.success) {
+    throw new Error(`Invalid sensor types file ${path}: ${z.prettifyError(result.error)}`);
+  }
+  return result.data;
+}
+
+// ---------- Validating a message ----------
+
+/** One validated MQTT message. values: metric → number, e.g. { temperature: 21.4, humidity: 45 } */
+export interface Reading {
   room: string;
   sensor: string;
   recordedAt: Date;
+  values: Record<string, number>;
 }
+
+export type Validation =
+  | { ok: true; values: Record<string, number> }
+  | { ok: false; reason: string };
+
+/**
+ * Builds one Zod schema per sensor type from the registry. Every metric of the type is
+ * required and must be a number inside [min, max]; unknown extra fields are stripped.
+ */
+export function createValidator(types: SensorTypes) {
+  const schemas = new Map(
+    Object.entries(types).map(([sensor, type]) => [
+      sensor,
+      z.object(
+        Object.fromEntries(
+          Object.entries(type.metrics).map(([metric, d]) => [metric, z.number().min(d.min).max(d.max)]),
+        ),
+      ),
+    ]),
+  );
+
+  return (sensor: string, payload: unknown): Validation => {
+    const schema = schemas.get(sensor);
+    if (!schema) {
+      return { ok: false, reason: `unknown sensor type "${sensor}" (not in sensor-types.json)` };
+    }
+
+    const result = schema.safeParse(payload);
+    if (!result.success) {
+      return {
+        ok: false,
+        reason: result.error.issues.map((i) => `${i.path.join(".") || "payload"}: ${i.message}`).join("; "),
+      };
+    }
+
+    return { ok: true, values: result.data as Record<string, number> };
+  };
+}
+
+// ---------- Topics ----------
 
 // Topics look like: home/<room>/<sensor>   e.g. home/living-room/bme280
 const NAME = /^[a-z0-9-]{1,40}$/;

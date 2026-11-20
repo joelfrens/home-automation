@@ -20,7 +20,7 @@ services:
       - "5433:5432"   # 5433 on the Mac: Homebrew Postgres already uses 5432
     volumes:
       - pg-data:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      # Tables are created by Laravel migrations: docker compose exec web php artisan migrate
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U home -d home"]
       interval: 5s
@@ -75,6 +75,7 @@ services:
       DB_PASSWORD: home_dev_password
     volumes:
       - ./web:/app                # live code from the Mac, no rebuild needed when editing
+      - ./packages:/packages      # our Composer packages (web/composer.json: path repository ../packages/*)
     depends_on:
       postgres:
         condition: service_healthy
@@ -91,6 +92,7 @@ services:
       - "5173:5173"
     volumes:
       - ./web:/app
+      - ./packages:/packages      # Wayfinder runs artisan, which loads the packages
       - web-node-modules:/app/node_modules   # Linux packages, kept separate from the Mac's node_modules
     healthcheck:
       disable: true               # the image's built-in check is for the PHP web server, which this container doesn't run

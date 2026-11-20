@@ -1,23 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WriteBuffer } from "../src/buffer.js";
-import type { Reading } from "../src/schema.js";
-
-// A reading whose temperature doubles as an ID, so tests can check order easily.
-const reading = (id: number): Reading => ({
-  room: "test-room",
-  sensor: "bme280",
-  temperature: id,
-  humidity: 40,
-  pressure: 1000,
-  recordedAt: new Date(0),
-});
-const ids = (rows: Reading[]) => rows.map((r) => r.temperature);
+// The buffer is generic, so tests store simple numbered items to check order easily.
+type Item = { id: number };
+const reading = (id: number): Item => ({ id });
+const ids = (rows: Item[]) => rows.map((r) => r.id);
 
 // A fake database write we can pause, then let succeed or fail, to simulate a slow database.
 function deferredWriter() {
   const pending: Array<{ resolve: () => void; reject: (e: Error) => void }> = [];
   const write = vi.fn(
-    (_rows: Reading[]) => new Promise<void>((resolve, reject) => pending.push({ resolve, reject })),
+    (_rows: Item[]) => new Promise<void>((resolve, reject) => pending.push({ resolve, reject })),
   );
   return {
     write,
