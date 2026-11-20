@@ -20,7 +20,11 @@ export function metricIcon(metric: string): LucideIcon {
 }
 
 /** Rounded for display: 21.46 → "21.5" (temperature), 45.2 → "45" (humidity) */
-export function formatValue(metric: string, value: number, extraDecimals = 0): string {
+export function formatValue(
+    metric: string,
+    value: number,
+    extraDecimals = 0,
+): string {
     return value.toFixed((DECIMALS[metric] ?? 1) + extraDecimals);
 }
 
