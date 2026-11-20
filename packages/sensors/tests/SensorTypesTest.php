@@ -3,8 +3,8 @@
 namespace Joelfrens\HomeAutomation\Sensors\Tests;
 
 use InvalidArgumentException;
-use JsonException;
 use Joelfrens\HomeAutomation\Sensors\SensorTypes;
+use JsonException;
 use PHPUnit\Framework\TestCase as PlainTestCase;
 
 class SensorTypesTest extends PlainTestCase

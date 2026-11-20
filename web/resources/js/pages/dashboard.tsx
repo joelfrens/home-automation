@@ -1,10 +1,12 @@
-import { Head, router, usePoll } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
+import { LiveStatus } from '@/components/readings/live-status';
 import { ReadingsChart } from '@/components/readings/readings-chart';
 import { RecentReadings } from '@/components/readings/recent-readings';
 import { RoomCard } from '@/components/readings/room-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useLiveReadings } from '@/hooks/use-live-readings';
 import { useNow } from '@/hooks/use-now';
 import { dashboard } from '@/routes';
 import type {
@@ -31,17 +33,19 @@ export default function Dashboard({
     range,
     metrics,
     thresholds,
-    latest,
+    latest: storedLatest,
     history,
-    recent,
+    recent: storedRecent,
 }: Props) {
     const [metricKey, setMetricKey] = useState(metrics[0]?.key ?? '');
     const metric = metrics.find((m) => m.key === metricKey) ?? metrics[0];
     const now = useNow();
 
-    // Re-fetch the readings from Laravel every 10 s (only these props, not the whole page).
-    // This is "polling". Reverb will replace it with readings pushed the moment they arrive.
-    usePoll(10_000, { only: ['latest', 'history', 'recent'] });
+    // Readings from the database, plus new ones pushed live by Reverb (see the hook for details).
+    const { latest, recent, status } = useLiveReadings(
+        storedLatest,
+        storedRecent,
+    );
 
     const changeRange = (value: string) => {
         if (!value) {
@@ -63,6 +67,9 @@ export default function Dashboard({
         <>
             <Head title="Dashboard" />
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
+                <div className="flex justify-end">
+                    <LiveStatus status={status} />
+                </div>
                 {latest.length === 0 ? (
                     <NoReadingsYet />
                 ) : (
@@ -162,7 +169,7 @@ function NoReadingsYet() {
                     <code className="rounded bg-muted px-1">
                         cd ingestion && npm run simulate
                     </code>{' '}
-                    to send fake ones. This page refreshes every 10 seconds.
+                    to send fake ones. New readings appear here automatically.
                 </p>
             </CardContent>
         </Card>
