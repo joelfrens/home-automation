@@ -123,4 +123,20 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Household admin account
+    |--------------------------------------------------------------------------
+    |
+    | Registration is turned off; DatabaseSeeder creates this single login.
+    | Set ADMIN_* in .env (not committed).
+    |
+    */
+
+    'admin' => [
+        'name' => env('ADMIN_NAME', 'Admin'),
+        'email' => env('ADMIN_EMAIL', 'admin@home.local'),
+        'password' => env('ADMIN_PASSWORD'),
+    ],
+
 ];

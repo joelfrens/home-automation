@@ -55,8 +55,7 @@ Development can use simulated readings; physical sensors run alongside.
       Dashboard (/dashboard): room cards, history chart (6h/24h/7d), recent table; metric-driven
       (labels/units from the registry), polls every 10 s via Inertia usePoll (Reverb replaces it).
       Next: decide how Laravel learns about readings (php artisan mqtt:listen vs ingestion -> Reverb),
-      then Reverb (public channel, then private), then CI jobs (Laravel + package tests) + docs.
-      web/.github/workflows/tests.yml does not run (not at repo root).
+      then Reverb (public channel, then private).
 - [ ] AI features
 - [ ] Deploy to Raspberry Pi 5 (Docker, systemd, Chromium kiosk mode on its screen)
 - [ ] Push to GitHub with README, diagram and photos
@@ -93,6 +92,22 @@ Development can use simulated readings; physical sensors run alongside.
           cable, or an Adafruit/Pimoroni/SparkFun breakout
         - Optional: 3.7 V LiPo with JST 1.25 mm plug (check polarity), female-female jumper wires
       Build in stages: LoRa "hello" between boards -> sensor readings -> gateway into MQTT.
+
+## CI
+.github/workflows/ci.yml runs on every push/PR (GitHub only reads workflows from the repo-root .github/):
+- ingestion: npm ci, typecheck, test, build, prod audit (Node 22 + 24)
+- web: composer install, .env from .env.example, npm ci, npm run build (Wayfinder generates route types),
+  npm run check (vp lint/format), types:check, Pint, PHPStan (Larastan), php artisan test
+- sensors: composer install (no lock), phpunit
+- firmware: arduino-cli compile (esp32 core 3.3.12, placeholder secrets.h from secrets.example.h)
+- compose: docker compose config
+Before pushing, the same checks locally: docker compose exec vite npm run check (check:fix to format),
+docker compose exec web vendor/bin/pint --test, docker compose exec web vendor/bin/phpstan analyse.
+PHPStan forbids env() outside config/ (null once config is cached): read settings via config().
+Ingestion lockfile gotcha: local npm (macOS) omits optional wasm deps (@emnapi/*) that npm ci on Linux
+requires. After changing deps, verify with: docker run --rm --platform linux/arm64 -v "$PWD":/repo
+-w /repo/ingestion node:22 npm ci  (use --platform linux/arm64; amd64 emulation crashes node on M1).
+Dependabot (.github/dependabot.yml): weekly grouped PR for GitHub Actions versions.
 
 ## Useful commands
 - Start infrastructure: docker compose up -d

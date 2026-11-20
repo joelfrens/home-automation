@@ -51,7 +51,11 @@ export default function Dashboard({
         router.get(
             dashboard.url({ query: { range: value } }),
             {},
-            { preserveState: true, preserveScroll: true, only: ['range', 'history'] },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                only: ['range', 'history'],
+            },
         );
     };
 

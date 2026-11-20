@@ -1,5 +1,7 @@
 # Home Sensor Platform
 
+[![CI](https://github.com/joelfrens/home-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/joelfrens/home-automation/actions/workflows/ci.yml)
+
 End-to-end IoT telemetry pipeline: ESP32 sensor nodes publish environmental readings over MQTT; a TypeScript ingestion service validates and persists them to PostgreSQL; Grafana visualises them. Fully containerised, configuration-as-code, designed to run unchanged on a Raspberry Pi 5.
 
 <!-- TODO: add photos/screenshots, e.g.
@@ -147,6 +149,8 @@ docker compose exec web php artisan test                                        
 docker compose exec -w /packages/sensors web sh -c "composer install && vendor/bin/phpunit"   # sensors package
 ```
 
+All of these, plus linting, type checks, static analysis and an ESP32 firmware compile, run in GitHub Actions on every push ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+
 No test touches real infrastructure:
 
 - **Ingestion (Vitest).** Topic parsing, the sensor-type registry, payload validation generated from it (boundary values, wrong types, missing fields, unknown sensor types, extra fields stripped), message → measurement rows, and the write buffer (batching, retry without hammering, re-queue order, oldest-first drop, drain on shutdown) using a fake writer and Vitest fake timers. The buffer suite was mutation-checked.
@@ -204,7 +208,7 @@ Development configuration for a trusted LAN: Mosquitto accepts anonymous clients
 - [ ] AI features over the collected data
 - [ ] Deploy to Raspberry Pi 5: Docker, systemd for ingestion, Chromium kiosk on the attached display
 - [x] Unit tests for ingestion (validation, buffer retry/drop behaviour)
-- [ ] Run tests in CI (GitHub Actions) on every push
+- [x] CI with GitHub Actions on every push: ingestion (Node 22 & 24), Laravel app (lint, types, Pint, PHPStan, tests), sensors package tests, ESP32 firmware compile, Compose validation
 - [ ] Node-side buffering with NTP timestamps to survive WiFi outages without data gaps
 - [ ] OTA firmware updates: ArduinoOTA for development, then MQTT-triggered HTTP OTA with signed images for fleet updates
 - [x] Generic `measurements` storage and sensor-type registry, ready for more sensor types (water level, air quality)
