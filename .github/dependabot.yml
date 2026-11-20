@@ -1,3 +1,4 @@
+# Weekly PRs that bump the GitHub Actions used in .github/workflows (grouped into one PR).
 version: 2
 updates:
   - package-ecosystem: "github-actions"

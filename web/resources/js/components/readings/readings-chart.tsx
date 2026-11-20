@@ -89,7 +89,10 @@ export function ReadingsChart({
                 data={data}
                 margin={{ top: 8, right: 16, bottom: 0, left: 0 }}
             >
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <CartesianGrid
+                    strokeDasharray="3 3"
+                    className="stroke-border"
+                />
                 <XAxis
                     dataKey="t"
                     type="number"
