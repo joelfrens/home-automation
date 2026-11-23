@@ -41,13 +41,16 @@ Development can use simulated readings; physical sensors run alongside.
       Deps: zod 4.6.7 (upgraded from 3 for GHSA-mrhx-c7xc-m3w5). Known dev-only advisory: picomatch
       via vite/vitest, no fix yet; npm audit fix --force suggests downgrading vitest, do NOT do that.
 - [x] Grafana dashboards (provisioned from grafana/provisioning/dashboards/files/)
-- [ ] Laravel + React app in web/ (IN PROGRESS – app, login, dashboard, live updates done)
+- [ ] Laravel + React app in web/ (IN PROGRESS – app, login, dashboard, live updates, family accounts done)
       Laravel 13, React starter kit (Inertia 3, React 19, Tailwind 4, Wayfinder, Pest), runs in Docker
       (NOT Sail, NOT Herd): web/Dockerfile (FrankenPHP; "dev" stage adds Node because Vite's Wayfinder
       plugin runs php artisan). Services: web http://localhost:8000, vite :5173 (same home-web image).
       DB: Laravel tables live in the same Postgres db "home"; compose env sets DB_HOST=postgres:5432,
       web/.env keeps 127.0.0.1:5433 for artisan on the Mac.
-      Login: registration disabled; single user from DatabaseSeeder using ADMIN_* in web/.env.
+      Login: registration disabled; first user (admin) from DatabaseSeeder using ADMIN_* in web/.env.
+      Family accounts (2026-11-23): users.is_admin (not mass-assignable; forceFill), Gate "admin",
+      Settings → Family (FamilyController: add/remove/toggle admin). Last admin can't be removed,
+      demoted or delete their own account (User::isLastAdmin).
       "/" redirects to /dashboard. Welcome/register pages removed.
       DANGER: tests use RefreshDatabase (drops all tables). On 2026-11-19 a test run in the container
       wiped the real "home" db (1,498 readings lost) because Docker env vars live in $_SERVER and
@@ -59,15 +62,18 @@ Development can use simulated readings; physical sensors run alongside.
       mosquitto -> mqtt-listener container (php artisan mqtt:listen, packages/mqtt) fires
       MessageReceived -> web/app/Listeners/BroadcastSensorReading parses with sensors' SensorMessage
       -> App\Events\ReadingReceived (ShouldBroadcastNow, public channel "readings") -> reverb
-      container :8080 -> hooks/use-live-readings.ts (useEchoPublic; reload all on reconnect; poll
+      container :8080 -> hooks/use-live-readings.ts (useEcho, private; reload all on reconnect; poll
       history 60 s when live, everything 10 s when offline; LiveStatus badge). Ingestion still stores.
       Echo wsHost = window.location.hostname (works from LAN devices / Pi). Containers get
       REVERB_HOST=reverb, MQTT_HOST=mosquitto via x-laravel-env anchor in docker-compose.yml.
       php-mqtt: auto-reconnect not allowed with clean session -> listener exits on broker loss,
       Docker restarts it.
-      Reverb channel "readings" is PUBLIC (anyone reaching :8080 with the app key can listen);
-      fine on the LAN, must become private before exposing beyond it.
-      Next: private channel (auth via routes/channels.php), then switches package.
+      Reverb channel "readings" is PRIVATE (routes/channels.php: any logged-in user). Browser auth:
+      app.tsx channelAuthorization.customHandler POSTs /broadcasting/auth with X-XSRF-TOKEN read from
+      the cookie at call time (no csrf meta tag; Inertia login doesn't reload <head>). Pusher event
+      name is "App\Events\ReadingReceived" (Echo adds the App.Events namespace).
+      Next: family features plan (~/.claude/plans/can-we-use-the-resilient-aho.md): shopping (laravel/ai),
+      reminders (ntfy), assistant, RAG playground, family memory (pgvector).
 - [ ] AI features
 - [ ] Deploy to Raspberry Pi 5 (Docker, systemd, Chromium kiosk mode on its screen)
 - [ ] Push to GitHub with README, diagram and photos

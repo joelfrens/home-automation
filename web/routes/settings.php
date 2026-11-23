@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Settings\FamilyController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Auth\Middleware\RequirePassword;
@@ -24,6 +25,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('user-password.update');
 
     Route::inertia('settings/appearance', 'settings/appearance')->name('appearance.edit');
+});
+
+// Family accounts: admins only.
+Route::middleware(['auth', 'verified', 'can:admin'])->group(function () {
+    Route::get('settings/family', [FamilyController::class, 'index'])->name('family.index');
+    Route::post('settings/family', [FamilyController::class, 'store'])->name('family.store');
+    Route::patch('settings/family/{user}/admin', [FamilyController::class, 'toggleAdmin'])->name('family.toggle-admin');
+    Route::delete('settings/family/{user}', [FamilyController::class, 'destroy'])->name('family.destroy');
 });
 
 Route::get('.well-known/passkey-endpoints', function () {

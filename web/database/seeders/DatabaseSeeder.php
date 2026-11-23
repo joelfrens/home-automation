@@ -9,8 +9,8 @@ use RuntimeException;
 class DatabaseSeeder extends Seeder
 {
     /**
-     * Creates (or updates) the single household account.
-     * Registration is turned off, so this is the only way to get a login.
+     * Creates (or updates) the first household account, as an admin.
+     * Registration is turned off: this admin adds the rest of the family in Settings → Family.
      * Credentials come from config/app.php 'admin', i.e. ADMIN_* in .env (not committed).
      */
     public function run(): void
@@ -22,7 +22,7 @@ class DatabaseSeeder extends Seeder
             throw new RuntimeException('Set ADMIN_PASSWORD in web/.env before seeding.');
         }
 
-        User::updateOrCreate(
+        $user = User::updateOrCreate(
             ['email' => $admin['email']],
             [
                 'name' => $admin['name'],
@@ -30,5 +30,8 @@ class DatabaseSeeder extends Seeder
                 'email_verified_at' => now(),       // no email server, so mark as verified
             ],
         );
+
+        // is_admin is deliberately not mass-assignable, so set it explicitly.
+        $user->forceFill(['is_admin' => true])->save();
     }
 }
