@@ -41,7 +41,7 @@ Development can use simulated readings; physical sensors run alongside.
       Deps: zod 4.6.7 (upgraded from 3 for GHSA-mrhx-c7xc-m3w5). Known dev-only advisory: picomatch
       via vite/vitest, no fix yet; npm audit fix --force suggests downgrading vitest, do NOT do that.
 - [x] Grafana dashboards (provisioned from grafana/provisioning/dashboards/files/)
-- [ ] Laravel + React app in web/ (IN PROGRESS – app, login, dashboard, live updates, family accounts done)
+- [ ] Laravel + React app in web/ (IN PROGRESS – app, login, dashboard, live updates, family accounts, reminders done)
       Laravel 13, React starter kit (Inertia 3, React 19, Tailwind 4, Wayfinder, Pest), runs in Docker
       (NOT Sail, NOT Herd): web/Dockerfile (FrankenPHP; "dev" stage adds Node because Vite's Wayfinder
       plugin runs php artisan). Services: web http://localhost:8000, vite :5173 (same home-web image).
@@ -72,8 +72,18 @@ Development can use simulated readings; physical sensors run alongside.
       app.tsx channelAuthorization.customHandler POSTs /broadcasting/auth with X-XSRF-TOKEN read from
       the cookie at call time (no csrf meta tag; Inertia login doesn't reload <head>). Pusher event
       name is "App\Events\ReadingReceived" (Echo adds the App.Events namespace).
-      Next: family features plan (~/.claude/plans/can-we-use-the-resilient-aho.md): shopping (laravel/ai),
-      reminders (ntfy), assistant, RAG playground, family memory (pgvector).
+      Reminders (2026-11-23, branch reminders): packages/reminders (children/events/reminders tables,
+      EventPlanner, ReminderTime (DST-safe), EventExtractor + Ai\ExtractEvents (laravel/ai agent,
+      structured output, Claude Opus via config/reminders.php), reminders:send (scheduled every minute,
+      claims sent_at before sending, skips events already over), ReminderDue queued -> NtfyChannel).
+      web: /school pages (index, new = FileDrop upload/paste/text + manual, review = AI proposals,
+      edit), Settings → Profile ntfy_topic + test push + "AI this month", dashboard "Coming up" card.
+      AI: laravel/ai 1.4 (config/ai.php: anthropic + ollama), ANTHROPIC_API_KEY only in web/.env,
+      every call logged to ai_usage via App\Listeners\RecordAiUsage (prices in config/household-ai.php).
+      Tests fake the agent (ExtractEvents::fake), never call a real model. Containers: queue
+      (queue:work) and scheduler (schedule:work).
+      Next: shopping list (packages/shopping), then assistant, RAG playground, family memory (pgvector).
+      Plan: ~/.claude/plans/can-we-use-the-resilient-aho.md
 - [ ] AI features
 - [ ] Deploy to Raspberry Pi 5 (Docker, systemd, Chromium kiosk mode on its screen)
 - [ ] Push to GitHub with README, diagram and photos
@@ -115,7 +125,7 @@ Development can use simulated readings; physical sensors run alongside.
 - ingestion: npm ci, typecheck, test, build, prod audit (Node 22 + 24)
 - web: composer install, .env from .env.example, npm ci, npm run build (Wayfinder generates route types),
   npm run check (vp lint/format), types:check, Pint, PHPStan (Larastan), php artisan test
-- packages (matrix: sensors, mqtt): composer install (no lock), phpunit
+- packages (matrix: sensors, mqtt, reminders): composer install (no lock), phpunit
 - firmware: arduino-cli compile (esp32 core 3.3.12, placeholder secrets.h from secrets.example.h)
 - compose: docker compose config
 Before pushing, the same checks locally: docker compose exec vite npm run check (check:fix to format),
@@ -135,10 +145,12 @@ Dependabot (.github/dependabot.yml): weekly grouped PR for GitHub Actions versio
 - Laravel tests: docker compose exec web php artisan test   (in-memory SQLite, never the real db)
 - React type check: docker compose exec vite npm run types:check
 - Back up the db: docker compose exec -T postgres pg_dump -U home home > backup.sql
-- Package tests: docker compose exec -w /packages/sensors web sh -c "composer install && vendor/bin/phpunit"   (same for /packages/mqtt)
-- Pint on packages (not covered by CI): docker compose exec web vendor/bin/pint /packages/sensors /packages/mqtt --test
+- Package tests: docker compose exec -w /packages/sensors web sh -c "composer install && vendor/bin/phpunit"   (same for /packages/mqtt, /packages/reminders)
+- Pint on packages (not covered by CI): docker compose exec web vendor/bin/pint /packages/sensors /packages/mqtt /packages/reminders --test
 - Live readings: docker compose logs -f mqtt-listener reverb  (mqtt:listen -v prints every message)
 - Latest rows: docker exec -it home-postgres psql -U home -c "SELECT * FROM measurements ORDER BY id DESC LIMIT 6;"
+- Reminders: docker compose logs -f scheduler queue   (reminders:send every minute, ntfy jobs)
+- Send due reminders now: docker compose exec web php artisan reminders:send
 
 ## Conventions
 - Packages: non-UI logic goes in Composer packages under packages/<name> (PHP, name

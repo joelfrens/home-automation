@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Settings;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfileDeleteRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
+use App\Models\AiUsage;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -23,6 +25,12 @@ class ProfileController extends Controller
         return Inertia::render('settings/profile', [
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
             'status' => $request->session()->get('status'),
+            // A fresh random topic to start with: on public ntfy.sh the name is the only secret.
+            'suggestedNtfyTopic' => Str::random(24),
+            'ntfyServer' => config('reminders.ntfy.server'),
+            'aiCostThisMonth' => round((float) AiUsage::query()
+                ->where('created_at', '>=', now()->startOfMonth())
+                ->sum('cost'), 2),
         ]);
     }
 

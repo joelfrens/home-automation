@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/joelfrens/home-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/joelfrens/home-automation/actions/workflows/ci.yml)
 
-End-to-end IoT telemetry pipeline: ESP32 sensor nodes publish environmental readings over MQTT; a TypeScript ingestion service validates and persists them to PostgreSQL; Grafana visualises them, and a Laravel + React dashboard shows them live over WebSockets (Laravel Reverb). Fully containerised, configuration-as-code, designed to run unchanged on a Raspberry Pi 5.
+End-to-end IoT telemetry pipeline: ESP32 sensor nodes publish environmental readings over MQTT; a TypeScript ingestion service validates and persists them to PostgreSQL; Grafana visualises them, and a Laravel + React dashboard shows them live over WebSockets (Laravel Reverb). The same app runs the household: school and family reminders that an AI (Claude, via Laravel's AI SDK) reads from letters, PDFs and screenshots, pushed to everyone's phone with ntfy. Fully containerised, configuration-as-code, designed to run unchanged on a Raspberry Pi 5.
 
 <!-- TODO: add photos/screenshots, e.g.
 ![Sensor node](docs/images/sensor.jpg)
@@ -21,6 +21,9 @@ flowchart LR
     B -->|home/+/+| H[mqtt:listen<br/>Laravel]
     H -->|validated reading| R[Reverb]
     R -->|WebSocket| G
+    L[Letter / PDF / screenshot] -->|upload| G
+    G <-->|structured output| AI[Claude API]
+    S[scheduler + queue] -->|reminders:send| N[ntfy → phones]
 ```
 
 Two independent consumers share the broker: **ingestion** stores every reading, and Laravel's **`mqtt:listen`** validates the same messages and broadcasts them through **Reverb** (WebSocket server), so open dashboards update the instant a reading arrives. The database stays the source of truth: dashboards reload from it on (re)connect and fall back to polling if the WebSocket drops.
@@ -33,6 +36,8 @@ Two independent consumers share the broker: **ingestion** stores every reading, 
 | Storage | PostgreSQL 17, schema owned by Laravel migrations | `packages/sensors/`, `web/database/` |
 | Web app | Laravel 13, React 19 (Inertia 3), TypeScript, Tailwind 4, Recharts, FrankenPHP, Pest | `web/` |
 | Real-time | Laravel Reverb (WebSockets, Pusher protocol), Laravel Echo, php-mqtt/client | `packages/mqtt/`, `web/` |
+| AI | Laravel AI SDK (`laravel/ai`): Claude for vision + structured output, Ollama for local models; per-call cost logging | `packages/reminders/`, `web/config/ai.php` |
+| Notifications | Laravel scheduler + queue, ntfy push to phones | `packages/reminders/` |
 | Packages | Composer packages for non-UI logic, tested with Orchestra Testbench | `packages/` |
 | Visualisation | Grafana (provisioned datasource + dashboard), Adminer | `grafana/` |
 | Infrastructure | Docker Compose | `docker-compose.yml` |
@@ -57,8 +62,9 @@ Two independent consumers share the broker: **ingestion** stores every reading, 
 ```bash
 git clone https://github.com/joelfrens/home-automation.git && cd home-automation
 
-# 1. Infrastructure + web app: Mosquitto, PostgreSQL, Grafana, Adminer, Laravel, Vite, Reverb, mqtt-listener
-cp web/.env.example web/.env      # set ADMIN_PASSWORD and REVERB_APP_KEY/SECRET, then: docker compose exec web php artisan key:generate
+# 1. Infrastructure + web app: Mosquitto, PostgreSQL, Grafana, Adminer, Laravel, Vite, Reverb, mqtt-listener, queue, scheduler
+cp web/.env.example web/.env      # set ADMIN_PASSWORD, REVERB_APP_KEY/SECRET and (for AI) ANTHROPIC_API_KEY,
+                                  # then: docker compose exec web php artisan key:generate
 docker compose up -d
 docker compose exec web composer install
 docker compose exec web php artisan migrate   # creates all tables, including measurements
@@ -156,6 +162,7 @@ cd ingestion && npm test                                                        
 docker compose exec web php artisan test                                               # Laravel app (Pest/PHPUnit)
 docker compose exec -w /packages/sensors web sh -c "composer install && vendor/bin/phpunit"   # sensors package
 docker compose exec -w /packages/mqtt web sh -c "composer install && vendor/bin/phpunit"      # mqtt package
+docker compose exec -w /packages/reminders web sh -c "composer install && vendor/bin/phpunit" # reminders package
 ```
 
 All of these, plus linting, type checks, static analysis and an ESP32 firmware compile, run in GitHub Actions on every push ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
@@ -165,7 +172,8 @@ No test touches real infrastructure:
 - **Ingestion (Vitest).** Topic parsing, the sensor-type registry, payload validation generated from it (boundary values, wrong types, missing fields, unknown sensor types, extra fields stripped), message → measurement rows, and the write buffer (batching, retry without hammering, re-queue order, oldest-first drop, drain on shutdown) using a fake writer and Vitest fake timers. The buffer suite was mutation-checked.
 - **Sensors package (PHPUnit + Orchestra Testbench).** Registry loading and validation, MQTT message parsing (same rules as ingestion), ranges, latest-per-room, bucketed history averages, recent messages, on in-memory SQLite.
 - **MQTT package (PHPUnit + Testbench).** `mqtt:listen` subscriptions and event dispatch against a fake broker client, including a failing listener not stopping the loop.
-- **Laravel app (Pest/PHPUnit).** Auth flows, disabled registration, family accounts (admin-only, last admin protected), private channel authorisation (guests refused), dashboard page props, MQTT message → broadcast (valid, invalid, Reverb down).
+- **Reminders package (PHPUnit + Testbench).** Reminder times across clock changes, saving/updating events (sent reminders kept), the AI answer cleaned like user input (impossible/past dates, bad times, unknown children), PDF attachments, `reminders:send` (once only, late but not too late, all-day mornings), ntfy messages. The AI is always faked.
+- **Laravel app (Pest/PHPUnit).** School pages, letter upload → AI → review → save (file types, sizes, AI down, nothing found), ntfy topic and test push, AI cost logging, auth flows, disabled registration, family accounts (admin-only, last admin protected), private channel authorisation (guests refused), dashboard page props, MQTT message → broadcast (valid, invalid, Reverb down).
 - **Safety guard.** Both PHP suites force in-memory SQLite and refuse to run `RefreshDatabase` against any other database (added after a test run once wiped the development database).
 
 ### Repository layout
@@ -184,12 +192,13 @@ ingestion/test/                  Vitest unit tests
 packages/sensors/                joelfrens/home-automation-sensors: registry, Measurement model,
                                  migration, SensorReadings queries, SensorMessage parser, tests
 packages/mqtt/                   joelfrens/home-automation-mqtt: broker connection, mqtt:listen, tests
+packages/reminders/              joelfrens/home-automation-reminders: events, AI extraction, reminders:send, ntfy
 web/                             Laravel 13 + React host app (Dockerfile, dashboard, auth)
 mosquitto/mosquitto.conf         Broker config
 grafana/provisioning/
   datasources/postgres.yml       Datasource (uid: home-postgres)
   dashboards/                    Provider + dashboard JSON
-docker-compose.yml               Mosquitto, PostgreSQL, Grafana, Adminer, web, vite, reverb, mqtt-listener
+docker-compose.yml               Mosquitto, PostgreSQL, Grafana, Adminer, web, vite, reverb, mqtt-listener, queue, scheduler
 ```
 
 ### Troubleshooting
@@ -210,6 +219,8 @@ docker-compose.yml               Mosquitto, PostgreSQL, Grafana, Adminer, web, v
 
 Development configuration for a trusted LAN: Mosquitto accepts anonymous clients and all credentials in `docker-compose.yml` are defaults. Before exposing anything beyond the local network, enable Mosquitto authentication (and TLS), rotate the database and Grafana passwords, and move them into an untracked `.env`. The Reverb `readings` channel is private: a browser must be logged in (Laravel signs the subscription via `/broadcasting/auth`, rules in `web/routes/channels.php`) before Reverb lets it listen. Family accounts are created by an admin (registration is disabled), and the household always keeps at least one admin.
 
+**Privacy of the AI and push features.** Letters, screenshots and children's first names are sent to the Claude API (API data is not used for training by default); uploads are stored privately and served only to logged-in users. Reminder texts pass through the public ntfy.sh server: each person's topic is a random 24-character name that acts as the password (anyone who knows it can read the messages). For more privacy, set `NTFY_TOKEN` with a protected or self-hosted ntfy server. The AI's answer is only a proposal: nothing is saved until a person reviews it, and text inside documents is treated as data, not instructions.
+
 ## Roadmap
 
 - [x] ESP32 firmware publishing over MQTT
@@ -219,7 +230,8 @@ Development configuration for a trusted LAN: Mosquitto accepts anonymous clients
 - [x] Laravel + React (Inertia) web app in Docker: login, sensor dashboard (cards, history chart, recent readings)
 - [x] Live dashboard updates via Reverb, Laravel MQTT listener in a separate `mqtt` package
 - [x] Family accounts (admin adds/removes members) and private Reverb channel (logged-in users only)
-- [ ] Shopping list with AI suggestions, school reminders from screenshots/PDFs with phone push (ntfy), family memory (RAG with pgvector)
+- [x] School & family reminders: AI reads letters/PDFs/screenshots (Claude, structured output), review screen, reminders pushed to phones (ntfy), scheduler + queue, AI cost tracking
+- [ ] Shopping list with AI suggestions; daily briefing; family memory (RAG with pgvector, local embeddings)
 - [ ] MQTT command path to devices (lights/switches) in a `switches` package
 - [ ] AI features over the collected data
 - [ ] Deploy to Raspberry Pi 5: Docker, systemd for ingestion, Chromium kiosk on the attached display
