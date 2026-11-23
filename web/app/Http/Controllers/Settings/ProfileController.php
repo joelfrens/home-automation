@@ -9,6 +9,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -49,6 +50,13 @@ class ProfileController extends Controller
     public function destroy(ProfileDeleteRequest $request): RedirectResponse
     {
         $user = $request->user();
+
+        // The household must keep one admin, or nobody could manage family accounts any more.
+        if ($user->isLastAdmin()) {
+            throw ValidationException::withMessages([
+                'password' => __('You are the only admin. Make someone else an admin first.'),
+            ]);
+        }
 
         Auth::logout();
 

@@ -7,6 +7,20 @@ import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { configureEcho } from '@laravel/echo-react';
 
+/**
+ * Private channels: before Reverb lets this browser listen, it asks Laravel
+ * POST /broadcasting/auth "may I join private-readings?". Laravel checks the session (are you
+ * logged in?) and routes/channels.php, then returns a signed "yes" that the browser hands to Reverb.
+ *
+ * That POST needs the CSRF token. We read Laravel's XSRF-TOKEN cookie at the moment of asking
+ * (not once at start-up), because logging in renews the token without reloading the page.
+ */
+function xsrfToken(): string {
+    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+
+    return match ? decodeURIComponent(match[1]) : '';
+}
+
 // Echo = the browser side of Laravel broadcasting. It opens ONE WebSocket to Reverb and
 // shares it between every useEcho() on the page.
 configureEcho({
@@ -21,6 +35,36 @@ configureEcho({
     wssPort: Number(import.meta.env.VITE_REVERB_PORT ?? 8080),
     forceTLS: import.meta.env.VITE_REVERB_SCHEME === 'https',
     enabledTransports: ['ws', 'wss'],
+    channelAuthorization: {
+        endpoint: '/broadcasting/auth',
+        transport: 'ajax',
+        customHandler: ({ socketId, channelName }, callback) => {
+            fetch('/broadcasting/auth', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-XSRF-TOKEN': xsrfToken(),
+                },
+                body: JSON.stringify({
+                    socket_id: socketId,
+                    channel_name: channelName,
+                }),
+            })
+                .then((response) =>
+                    response.ok
+                        ? response.json()
+                        : Promise.reject(
+                              new Error(
+                                  `Not allowed to listen to ${channelName} (HTTP ${response.status})`,
+                              ),
+                          ),
+                )
+                .then((data) => callback(null, data))
+                .catch((error: Error) => callback(error, null));
+        },
+    },
 });
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';

@@ -18,6 +18,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property int $id
  * @property string $name
  * @property string $email
+ * @property bool $is_admin
  * @property Carbon|null $email_verified_at
  * @property string $password
  * @property string|null $two_factor_secret
@@ -45,6 +46,16 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
+            'is_admin' => 'boolean',
         ];
+    }
+
+    /**
+     * True when this user is the only admin left. The household must always keep one admin,
+     * otherwise nobody could add or remove family members any more.
+     */
+    public function isLastAdmin(): bool
+    {
+        return $this->is_admin && static::query()->where('is_admin', true)->count() === 1;
     }
 }
