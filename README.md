@@ -62,7 +62,7 @@ cp web/.env.example web/.env      # set ADMIN_PASSWORD and REVERB_APP_KEY/SECRET
 docker compose up -d
 docker compose exec web composer install
 docker compose exec web php artisan migrate   # creates all tables, including measurements
-docker compose exec web php artisan db:seed   # creates the login from ADMIN_* in web/.env
+docker compose exec web php artisan db:seed   # creates the first login (an admin) from ADMIN_* in web/.env
 
 # 2. Ingestion service (watch mode)
 cd ingestion && npm install && npm run dev
@@ -74,7 +74,7 @@ ROOMS=office,garage INVALID_RATE=0.1 npm run simulate
 
 | Service | URL / port | Credentials (dev only) |
 |---|---|---|
-| Dashboard (Laravel + React) | http://localhost:8000 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` from `web/.env` |
+| Dashboard (Laravel + React) | http://localhost:8000 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` from `web/.env`; add family members in *Settings → Family* |
 | Grafana | http://localhost:3001 → *Dashboards → Home → Home sensors* | `admin` / `admin` |
 | Adminer | http://localhost:8081 (System: PostgreSQL, Server: `postgres`) | `home` / `home_dev_password` |
 | PostgreSQL | `localhost:5433` (container 5432) | `home` / `home_dev_password`, db `home` |
@@ -165,7 +165,7 @@ No test touches real infrastructure:
 - **Ingestion (Vitest).** Topic parsing, the sensor-type registry, payload validation generated from it (boundary values, wrong types, missing fields, unknown sensor types, extra fields stripped), message → measurement rows, and the write buffer (batching, retry without hammering, re-queue order, oldest-first drop, drain on shutdown) using a fake writer and Vitest fake timers. The buffer suite was mutation-checked.
 - **Sensors package (PHPUnit + Orchestra Testbench).** Registry loading and validation, MQTT message parsing (same rules as ingestion), ranges, latest-per-room, bucketed history averages, recent messages, on in-memory SQLite.
 - **MQTT package (PHPUnit + Testbench).** `mqtt:listen` subscriptions and event dispatch against a fake broker client, including a failing listener not stopping the loop.
-- **Laravel app (Pest/PHPUnit).** Auth flows, disabled registration, dashboard page props, MQTT message → broadcast (valid, invalid, Reverb down).
+- **Laravel app (Pest/PHPUnit).** Auth flows, disabled registration, family accounts (admin-only, last admin protected), private channel authorisation (guests refused), dashboard page props, MQTT message → broadcast (valid, invalid, Reverb down).
 - **Safety guard.** Both PHP suites force in-memory SQLite and refuse to run `RefreshDatabase` against any other database (added after a test run once wiped the development database).
 
 ### Repository layout
@@ -201,14 +201,14 @@ docker-compose.yml               Mosquitto, PostgreSQL, Grafana, Adminer, web, v
 | Ingestion logs `unknown sensor type` | The topic's sensor segment is not in `packages/sensors/sensor-types.json`; add it and restart ingestion |
 | Dashboard page is blank | Vite (port 5173) not running, or the page is opened from another device (dev assets are served from `localhost:5173`) |
 | Dashboard badge says "Offline" | Reverb not running (`docker compose logs reverb`) or `VITE_REVERB_APP_KEY` doesn't match `REVERB_APP_KEY`; the page still refreshes every 10 s |
-| Badge "Live" but nothing updates | `docker compose logs mqtt-listener` (should show `Subscribed to home/+/+`); run it with `-v` to print every message |
+| Badge "Live" but nothing updates | `docker compose logs mqtt-listener` (should show `Subscribed to home/+/+`); run it with `-v` to print every message. Browser console `Not allowed to listen to private-readings (HTTP 403)` = session expired, log in again |
 | Grafana rejects `admin`/`admin` | `GF_SECURITY_ADMIN_PASSWORD` only applies on first DB init: `docker exec home-grafana grafana cli admin reset-admin-password admin` |
 | Changing a provisioned datasource UID breaks Grafana startup | Add a one-off `deleteDatasources` entry for the old datasource, restart, then remove it |
 | Upload fails / no serial port | Use Upload Speed 115200 and a data-capable USB-C cable |
 
 ## Security
 
-Development configuration for a trusted LAN: Mosquitto accepts anonymous clients and all credentials in `docker-compose.yml` are defaults. Before exposing anything beyond the local network, enable Mosquitto authentication (and TLS), rotate the database and Grafana passwords, and move them into an untracked `.env`. The Reverb `readings` channel is currently public (any client with the app key can subscribe); switch it to a private channel before exposing port 8080.
+Development configuration for a trusted LAN: Mosquitto accepts anonymous clients and all credentials in `docker-compose.yml` are defaults. Before exposing anything beyond the local network, enable Mosquitto authentication (and TLS), rotate the database and Grafana passwords, and move them into an untracked `.env`. The Reverb `readings` channel is private: a browser must be logged in (Laravel signs the subscription via `/broadcasting/auth`, rules in `web/routes/channels.php`) before Reverb lets it listen. Family accounts are created by an admin (registration is disabled), and the household always keeps at least one admin.
 
 ## Roadmap
 
@@ -217,8 +217,10 @@ Development configuration for a trusted LAN: Mosquitto accepts anonymous clients
 - [x] TypeScript ingestion service with validation, batching and retry
 - [x] Grafana dashboard provisioned as code
 - [x] Laravel + React (Inertia) web app in Docker: login, sensor dashboard (cards, history chart, recent readings)
-- [x] Live dashboard updates via Reverb (public channel), Laravel MQTT listener in a separate `mqtt` package
-- [ ] Private channel (logged-in users only); MQTT command path to devices (lights/switches) in a `switches` package
+- [x] Live dashboard updates via Reverb, Laravel MQTT listener in a separate `mqtt` package
+- [x] Family accounts (admin adds/removes members) and private Reverb channel (logged-in users only)
+- [ ] Shopping list with AI suggestions, school reminders from screenshots/PDFs with phone push (ntfy), family memory (RAG with pgvector)
+- [ ] MQTT command path to devices (lights/switches) in a `switches` package
 - [ ] AI features over the collected data
 - [ ] Deploy to Raspberry Pi 5: Docker, systemd for ingestion, Chromium kiosk on the attached display
 - [x] Unit tests for ingestion (validation, buffer retry/drop behaviour)

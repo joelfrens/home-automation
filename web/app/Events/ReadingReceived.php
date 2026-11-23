@@ -2,7 +2,7 @@
 
 namespace App\Events;
 
-use Illuminate\Broadcasting\Channel;
+use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 
@@ -10,8 +10,8 @@ use Illuminate\Foundation\Events\Dispatchable;
  * A new sensor reading, pushed to every open dashboard through Reverb.
  *
  * ShouldBroadcastNow = send it to Reverb immediately (ShouldBroadcast would wait for a queue worker).
- * The browser receives the public properties below as JSON, on the "readings" channel,
- * as the event "ReadingReceived" (useEcho in resources/js/pages/dashboard.tsx).
+ * The browser receives the public properties below as JSON, on the private "readings" channel,
+ * as the event "ReadingReceived" (useEcho in resources/js/hooks/use-live-readings.ts).
  */
 class ReadingReceived implements ShouldBroadcastNow
 {
@@ -30,11 +30,11 @@ class ReadingReceived implements ShouldBroadcastNow
     ) {}
 
     /**
-     * Public channel: anyone who can reach Reverb may listen. Fine on the home LAN for now;
-     * a private channel (only logged-in users) comes next.
+     * Private channel: before Reverb lets a browser listen, the browser must ask Laravel
+     * (POST /broadcasting/auth) and Laravel only says yes to logged-in users (routes/channels.php).
      */
-    public function broadcastOn(): Channel
+    public function broadcastOn(): PrivateChannel
     {
-        return new Channel('readings');
+        return new PrivateChannel('readings');
     }
 }

@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { useConnectionStatus, useEchoPublic } from '@laravel/echo-react';
+import { useConnectionStatus, useEcho } from '@laravel/echo-react';
 import type { ConnectionStatus } from '@laravel/echo-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Reading, RecentReading } from '@/types';
@@ -14,8 +14,9 @@ const cardKey = (r: Reading) => `${r.room}|${r.sensor}`;
  * Live readings for the dashboard.
  *
  * The page arrives with readings from the database (Inertia props). After that, Reverb pushes
- * each new reading over a WebSocket ("ReadingReceived" on the public "readings" channel) and
- * we lay it on top of those props, so cards and the table update the moment a reading arrives.
+ * each new reading over a WebSocket ("ReadingReceived" on the private "readings" channel; only
+ * logged-in users may listen, see routes/channels.php) and we lay it on top of those props,
+ * so cards and the table update the moment a reading arrives.
  *
  * Reverb doesn't store messages: anything sent while we were disconnected is lost. So:
  *  - on reconnect, reload everything from the database (catch up);
@@ -27,7 +28,7 @@ export function useLiveReadings(latest: Reading[], recent: RecentReading[]) {
     const status: ConnectionStatus = useConnectionStatus();
     const connected = status === 'connected';
 
-    useEchoPublic<RecentReading>('readings', 'ReadingReceived', (reading) => {
+    useEcho<RecentReading>('readings', 'ReadingReceived', (reading) => {
         setPushed((current) => [reading, ...current].slice(0, RECENT_LIMIT));
     });
 

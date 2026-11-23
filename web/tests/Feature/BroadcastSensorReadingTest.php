@@ -2,7 +2,7 @@
 
 use App\Events\ReadingReceived;
 use Illuminate\Broadcasting\BroadcastException;
-use Illuminate\Broadcasting\Channel;
+use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\Factory as BroadcastFactory;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
@@ -36,10 +36,10 @@ test('invalid messages are not broadcast', function (string $topic, string $payl
     'not a sensor topic' => ['home/kitchen/bme280/cmd', '{"on":true}'],
 ]);
 
-test('the reading goes to the public readings channel', function () {
+test('the reading goes to the private readings channel', function () {
     $event = new ReadingReceived('id', 'kitchen', 'bme280', '2026-11-20T18:30:05+00:00', ['temperature' => 21.4]);
 
-    expect($event->broadcastOn())->toEqual(new Channel('readings'));
+    expect($event->broadcastOn())->toEqual(new PrivateChannel('readings'));
 });
 
 test('if Reverb is down the listener logs instead of crashing the mqtt listener', function () {
