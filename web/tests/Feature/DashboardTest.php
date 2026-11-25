@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 use Joelfrens\HomeAutomation\Sensors\Database\Factories\MeasurementFactory;
 use Tests\TestCase;
@@ -73,5 +74,51 @@ class DashboardTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->where('range', '24h'));
 
         $this->actingAs($user)->get('/dashboard?range[]=6h')->assertOk();
+    }
+
+    public function test_weather_is_a_deferred_prop()
+    {
+        $this->actingAs(User::factory()->create())
+            ->get(route('dashboard'))
+            ->assertInertia(fn (Assert $page) => $page->missing('weather'));
+    }
+
+    public function test_weather_comes_from_the_weather_package()
+    {
+        config(['weather.latitude' => '51.5', 'weather.longitude' => '-0.13']);
+        $hour = now()->startOfHour();
+        Http::fake(['api.open-meteo.com/*' => Http::response([
+            'current' => ['time' => now()->getTimestamp(), 'temperature_2m' => 4.2],
+            'hourly' => [
+                'time' => [$hour->getTimestamp(), $hour->addHour()->getTimestamp()],
+                'temperature_2m' => [4.0, 6.5],
+                'precipitation_probability' => [10, 60],
+            ],
+        ])]);
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('dashboard'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->loadDeferredProps(fn (Assert $reload) => $reload
+                    ->where('weather.enabled', true)
+                    ->where('weather.current.temperature', 4.2)
+                    ->where('weather.next.minTemperature', 4)
+                    ->where('weather.next.maxTemperature', 6.5)
+                    ->where('weather.next.rainChance', 60)));
+    }
+
+    public function test_weather_off_without_a_location()
+    {
+        config(['weather.latitude' => null]);
+        Http::fake();
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('dashboard'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->loadDeferredProps(fn (Assert $reload) => $reload
+                    ->where('weather.enabled', false)
+                    ->where('weather.current', null)));
+
+        Http::assertNothingSent();
     }
 }

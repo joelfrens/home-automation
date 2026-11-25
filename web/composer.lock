@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "f60d855a3a81ee9bb6e87ad2759b2adb",
+    "content-hash": "7834ab7f594f557f05bf8572fdafb77f",
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
@@ -1627,6 +1627,56 @@
                 "MIT"
             ],
             "description": "Sensor types, measurement storage and queries (latest per room, averaged history) for the home automation Laravel app",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "joelfrens/home-automation-weather",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "../packages/weather",
+                "reference": "e8c14a025ac42ce5d8b28535c5f8d2db7ab5c4c5"
+            },
+            "require": {
+                "illuminate/cache": "^13.0",
+                "illuminate/console": "^13.0",
+                "illuminate/http": "^13.0",
+                "illuminate/support": "^13.0",
+                "php": "^8.4"
+            },
+            "require-dev": {
+                "orchestra/testbench": "^11.0"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Joelfrens\\HomeAutomation\\Weather\\WeatherServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Joelfrens\\HomeAutomation\\Weather\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "Joelfrens\\HomeAutomation\\Weather\\Tests\\": "tests/"
+                }
+            },
+            "scripts": {
+                "test": [
+                    "phpunit"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "Outdoor weather forecast (Open-Meteo) for the home automation Laravel app: current temperature and min/max temperature and rain chance for any time window",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -12801,7 +12851,8 @@
     "stability-flags": {
         "joelfrens/home-automation-mqtt": 20,
         "joelfrens/home-automation-reminders": 20,
-        "joelfrens/home-automation-sensors": 20
+        "joelfrens/home-automation-sensors": 20,
+        "joelfrens/home-automation-weather": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,

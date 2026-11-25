@@ -56,9 +56,9 @@ Run them locally first:
 docker compose exec vite npm run check          # lint + format (npm run check:fix to fix)
 docker compose exec vite npm run types:check    # TypeScript
 docker compose exec web vendor/bin/pint --test  # PHP style (vendor/bin/pint to fix)
-docker compose exec web vendor/bin/phpstan analyse
+docker compose exec web vendor/bin/phpstan analyse --memory-limit=1G
 docker compose exec web php artisan test
-docker compose exec web vendor/bin/pint /packages/sensors /packages/mqtt /packages/reminders --test
+docker compose exec web vendor/bin/pint /packages/sensors /packages/mqtt /packages/reminders /packages/weather --test
 ```
 
 Plus the tests of any package you changed, and `cd ingestion && npm run typecheck && npm test` if you

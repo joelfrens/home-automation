@@ -29,6 +29,9 @@ AI features), running in Docker on a laptop or a Raspberry Pi 5 with a touch scr
   `config/household-ai.php`).
 - Accounts: registration disabled; admins add family members (Settings → Family, Gate `admin`). The
   last admin can't be removed or demoted.
+- Outdoor weather: `packages/weather` (Open-Meteo, no key; `WEATHER_LATITUDE/LONGITUDE` in web/.env), cached
+  30 min, null on failure. Web tests block all unfaked HTTP (`Http::preventStrayRequests()` in
+  tests/TestCase.php) and run with Inertia SSR off (phpunit.xml).
 - Times are stored in UTC; household-local times use `HOUSEHOLD_TIMEZONE` (default `Europe/London`).
 
 ## Hard rules
