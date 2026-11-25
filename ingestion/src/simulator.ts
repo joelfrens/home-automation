@@ -1,6 +1,7 @@
 // Publishes fake BME280 readings so you can develop without the hardware.
 //   npm run simulate
 //   ROOMS=kitchen,office INVALID_RATE=0.1 npm run simulate
+import "./env.js"; // loads the repo-root .env (MQTT_SENSOR_PASSWORD)
 import { connect } from "mqtt";
 
 const url = process.env.MQTT_URL ?? "mqtt://localhost:1883";
@@ -20,7 +21,12 @@ const drift = (v: number, step: number, min: number, max: number) =>
   Math.min(max, Math.max(min, v + (Math.random() - 0.5) * step));
 const round = (v: number) => Math.round(v * 100) / 100;
 
-const client = connect(url, { clientId: `simulator-${process.pid}` });
+// Logs in like a real sensor node (user "sensor", may only publish to home/#).
+const client = connect(url, {
+  clientId: `simulator-${process.pid}`,
+  username: process.env.MQTT_USERNAME ?? "sensor",
+  password: process.env.MQTT_PASSWORD ?? process.env.MQTT_SENSOR_PASSWORD,
+});
 
 client.on("connect", () => {
   console.log(`[sim] connected to ${url}, publishing for: ${rooms.join(", ")}`);

@@ -1,0 +1,19 @@
+# Who may read (subscribe) and write (publish) which topics. # = everything below.
+# A publish to a topic the user may not write is silently dropped, so check this file first
+# when a device "sends" but nothing arrives.
+
+# You, for debugging with mosquitto_sub / mosquitto_pub
+user admin
+topic readwrite #
+
+# Sensor nodes (ESP32 firmware) and the simulator: publish readings only
+user sensor
+topic write home/#
+
+# ingestion/: stores every reading
+user ingestion
+topic read home/#
+
+# Laravel (mqtt:listen, later commands to lights and cameras)
+user laravel
+topic read home/#

@@ -1,3 +1,4 @@
+import "./env.js"; // first: loads the repo-root .env before config is read
 import { connect } from "mqtt";
 import { config } from "./config.js";
 import { insertMeasurements, pool } from "./db.js";
@@ -19,6 +20,8 @@ let rejected = 0;
 
 const client = connect(config.mqttUrl, {
   clientId: `ingestion-${process.pid}`,
+  username: config.mqttUsername,
+  password: config.mqttPassword,
   reconnectPeriod: 5_000, // keep retrying if the broker goes away
 });
 
@@ -31,7 +34,12 @@ client.on("connect", () => {
 });
 client.on("reconnect", () => console.log("[mqtt] reconnecting…"));
 client.on("offline", () => console.warn("[mqtt] broker offline"));
-client.on("error", (err) => console.error("[mqtt] error:", err.message));
+client.on("error", (err) => {
+  console.error("[mqtt] error:", err.message);
+  if (/not authori[sz]ed|bad user name or password/i.test(err.message)) {
+    console.error("[mqtt] login refused: check MQTT_INGESTION_PASSWORD in the repo-root .env");
+  }
+});
 
 client.on("message", (topic, payload) => {
   received++;

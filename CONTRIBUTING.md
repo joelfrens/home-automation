@@ -16,6 +16,7 @@ More detailed guides:
 Follow **Quick start** in the [README](README.md#quick-start). In short:
 
 ```bash
+cp .env.example .env                  # MQTT passwords: replace each with `openssl rand -hex 16`
 cp web/.env.example web/.env          # set ADMIN_PASSWORD and the REVERB_APP_* values
 docker compose up -d
 docker compose exec web composer install
@@ -41,8 +42,8 @@ Run PHP and Node commands **inside the containers** (`docker compose exec web �
 | A package's tests | `docker compose exec -w /packages/<name> web sh -c "composer install && vendor/bin/phpunit"` |
 | Ingestion tests | `cd ingestion && npm test` |
 | Logs | `docker compose logs -f web queue scheduler mqtt-listener reverb` |
-| Watch MQTT | `docker exec -it home-mosquitto mosquitto_sub -t 'home/#' -v` |
-| Fake a reading | `docker exec home-mosquitto mosquitto_pub -t 'home/test/bme280' -m '{"temperature":21,"humidity":40,"pressure":1000}'` |
+| Watch MQTT | `docker exec -it home-mosquitto sh -c 'mosquitto_sub -u admin -P "$MQTT_ADMIN_PASSWORD" -t "home/#" -v'` |
+| Fake a reading | `docker exec home-mosquitto sh -c 'mosquitto_pub -u admin -P "$MQTT_ADMIN_PASSWORD" -t home/test/bme280 -m "{\"temperature\":21,\"humidity\":40,\"pressure\":1000}"'` |
 | Browse the database | Adminer at http://localhost:8081 (PostgreSQL, server `postgres`, user `home`, db `home`) |
 | Back up the database | `docker compose exec -T postgres pg_dump -U home home > backups/backup.sql` |
 
@@ -78,8 +79,9 @@ touched ingestion. CI also compiles the firmware and validates `docker-compose.y
   weaken either; new packages copy both (see [docs/packages.md](docs/packages.md)).
 - **Back up before anything that could drop tables** (risky migrations, image changes):
   `pg_dump`, see the table above. `backups/` is git-ignored.
-- **Never commit secrets.** API keys go in `web/.env`, WiFi details in `firmware/…/secrets.h`;
-  both are git-ignored. `.env.example` and `secrets.example.h` hold empty placeholders.
+- **Never commit secrets.** MQTT passwords go in the repo-root `.env`, API keys in `web/.env`, WiFi
+  and the sensor's MQTT login in `firmware/…/secrets.h`; all git-ignored. The `.example` files hold
+  placeholders only.
 - **Tests never call a real AI model or push service.** Fake the agent (`MyAgent::fake([...])`) and
   HTTP (`Http::fake()`).
 - **Read settings with `config()`, never `env()` outside `config/`.** PHPStan enforces it; `env()`
@@ -96,4 +98,8 @@ touched ingestion. CI also compiles the firmware and validates `docker-compose.y
 - **Room and sensor names**: lowercase letters, numbers and dashes (`living-room`).
 - **Times**: stored in UTC; household-local times use `HOUSEHOLD_TIMEZONE` (default `Europe/London`).
 - **Keep `docker-compose.yml` portable**: no Mac-only paths or settings, so it runs on the Pi.
-- **Mosquitto allows anonymous access**: fine on a home network only; add auth before exposing it.
+- **MQTT logins**: every client logs in (no anonymous access). Users and what they may read/write
+  are in [`mosquitto/acl`](mosquitto/acl); passwords in the root `.env`. A new kind of device gets
+  its own user: add it to `.env.example`, `mosquitto/entrypoint.sh`, `mosquitto/acl` and
+  `docker-compose.yml`. A publish the ACL doesn't allow is dropped silently, so check the ACL first
+  when messages "disappear".

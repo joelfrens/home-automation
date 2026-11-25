@@ -3,6 +3,9 @@ import { fileURLToPath } from "node:url";
 // All settings can be overridden with environment variables (e.g. on the Pi).
 export const config = {
   mqttUrl: process.env.MQTT_URL ?? "mqtt://localhost:1883",
+  // The broker requires a login (mosquitto/acl); the password comes from the repo-root .env.
+  mqttUsername: process.env.MQTT_USERNAME ?? "ingestion",
+  mqttPassword: process.env.MQTT_PASSWORD ?? process.env.MQTT_INGESTION_PASSWORD,
   mqttTopic: process.env.MQTT_TOPIC ?? "home/+/+", // every room, every sensor type
   databaseUrl:
     process.env.DATABASE_URL ?? "postgres://home:home_dev_password@localhost:5433/home",

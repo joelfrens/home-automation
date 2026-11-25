@@ -63,6 +63,7 @@ Two independent consumers share the broker: **ingestion** stores every reading, 
 git clone https://github.com/joelfrens/home-automation.git && cd home-automation
 
 # 1. Infrastructure + web app: Mosquitto, PostgreSQL, Grafana, Adminer, Laravel, Vite, Reverb, mqtt-listener, queue, scheduler
+cp .env.example .env              # MQTT broker passwords (one per user, see mosquitto/acl): openssl rand -hex 16
 cp web/.env.example web/.env      # set ADMIN_PASSWORD, REVERB_APP_KEY/SECRET and (for AI) ANTHROPIC_API_KEY,
                                   # then: docker compose exec web php artisan key:generate
 docker compose up -d
@@ -84,7 +85,7 @@ ROOMS=office,garage INVALID_RATE=0.1 npm run simulate
 | Grafana | http://localhost:3001 → *Dashboards → Home → Home sensors* | `admin` / `admin` |
 | Adminer | http://localhost:8081 (System: PostgreSQL, Server: `postgres`) | `home` / `home_dev_password` |
 | PostgreSQL | `localhost:5433` (container 5432) | `home` / `home_dev_password`, db `home` |
-| Mosquitto | `localhost:1883` | anonymous |
+| Mosquitto | `localhost:1883` | users `admin`, `sensor`, `ingestion`, `laravel`; passwords in `.env` |
 | Reverb (WebSocket) | `ws://localhost:8080` | app key from `web/.env` |
 
 > PostgreSQL is mapped to host port **5433** to avoid colliding with a locally installed Postgres on 5432.
@@ -92,7 +93,7 @@ ROOMS=office,garage INVALID_RATE=0.1 npm run simulate
 ### Flashing a sensor node
 
 1. Install libraries: **Adafruit BME280** (+ Unified Sensor, BusIO) and **PubSubClient** (Nick O'Leary).
-2. `cp firmware/atom_bme280_mqtt/secrets.example.h firmware/atom_bme280_mqtt/secrets.h` and set `WIFI_NAME` / `WIFI_PASSWORD` (2.4 GHz only).
+2. `cp firmware/atom_bme280_mqtt/secrets.example.h firmware/atom_bme280_mqtt/secrets.h` and set `WIFI_NAME` / `WIFI_PASSWORD` (2.4 GHz only) and `MQTT_PASSWORD` (= `MQTT_SENSOR_PASSWORD` from `.env`).
 3. In `atom_bme280_mqtt.ino`, set `MQTT_HOST` to the broker host's LAN IP (`ipconfig getifaddr en0` on macOS) and `ROOM` (`[a-z0-9-]+`).
 4. Board **ESP32 Dev Module**, Upload Speed **115200** (921600 fails on the ATOM Lite), then upload.
 
@@ -117,8 +118,8 @@ Hardware: BME280 on the ATOM Lite Grove port (SDA = G26, SCL = G32), I2C address
 
 ```bash
 # Watch traffic / inject a test message
-docker exec -it home-mosquitto mosquitto_sub -t 'home/#' -v
-docker exec home-mosquitto mosquitto_pub -t 'home/test/bme280' -m '{"temperature":21,"humidity":40,"pressure":1000}'
+docker exec -it home-mosquitto sh -c 'mosquitto_sub -u admin -P "$MQTT_ADMIN_PASSWORD" -t "home/#" -v'
+docker exec home-mosquitto sh -c 'mosquitto_pub -u admin -P "$MQTT_ADMIN_PASSWORD" -t home/test/bme280 -m "{\"temperature\":21,\"humidity\":40,\"pressure\":1000}"'
 ```
 
 ### Database schema
@@ -146,6 +147,7 @@ Created by the sensors package migration (`php artisan migrate`). One BME280 mes
 | Variable | Default | Purpose |
 |---|---|---|
 | `MQTT_URL` | `mqtt://localhost:1883` | Broker |
+| `MQTT_USERNAME` / `MQTT_PASSWORD` | `ingestion` / `MQTT_INGESTION_PASSWORD` | Broker login; the repo-root `.env` is loaded automatically |
 | `MQTT_TOPIC` | `home/+/+` | Subscription filter |
 | `SENSOR_TYPES_PATH` | `../packages/sensors/sensor-types.json` | Sensor-type registry (shared with Laravel) |
 | `DATABASE_URL` | `postgres://home:home_dev_password@localhost:5433/home` | PostgreSQL |
@@ -206,6 +208,8 @@ docker-compose.yml               Mosquitto, PostgreSQL, Grafana, Adminer, web, v
 | Symptom | Cause / fix |
 |---|---|
 | Node logs `failed (state -2)` | Broker unreachable: wrong `MQTT_HOST`, Docker not running, or host firewall blocking 1883 |
+| Node logs `failed (state 4)` or `5`, broker logs `not authorised` | Wrong MQTT login: `MQTT_USER`/`MQTT_PASSWORD` in `secrets.h` must match user `sensor` / `MQTT_SENSOR_PASSWORD` in `.env` |
+| Messages published but never arrive | The user may not write that topic (`mosquitto/acl`); denied publishes are dropped silently |
 | Ingestion logs `database write failed` | Postgres not up, `measurements` not created yet (`docker compose exec web php artisan migrate`), or the client is hitting a different Postgres on 5432 — use 5433 |
 | Ingestion logs `unknown sensor type` | The topic's sensor segment is not in `packages/sensors/sensor-types.json`; add it and restart ingestion |
 | Dashboard page is blank | Vite (port 5173) not running, or the page is opened from another device (dev assets are served from `localhost:5173`) |
@@ -223,7 +227,7 @@ safe, plus guides on [packages](docs/packages.md), [touch screens](docs/touch.md
 
 ## Security
 
-Development configuration for a trusted LAN: Mosquitto accepts anonymous clients and all credentials in `docker-compose.yml` are defaults. Before exposing anything beyond the local network, enable Mosquitto authentication (and TLS), rotate the database and Grafana passwords, and move them into an untracked `.env`. The Reverb `readings` channel is private: a browser must be logged in (Laravel signs the subscription via `/broadcasting/auth`, rules in `web/routes/channels.php`) before Reverb lets it listen. Family accounts are created by an admin (registration is disabled), and the household always keeps at least one admin.
+Designed for a trusted home network. **MQTT requires a login**: each kind of client (sensors, ingestion, Laravel, admin) has its own user and password (from the untracked `.env`), and [`mosquitto/acl`](mosquitto/acl) limits what each may do, e.g. sensors can only publish readings and can't read anything. The database and Grafana passwords in `docker-compose.yml` are still development defaults; before exposing anything beyond the LAN, change them and add TLS to MQTT. The Reverb `readings` channel is private: a browser must be logged in (Laravel signs the subscription via `/broadcasting/auth`, rules in `web/routes/channels.php`) before Reverb lets it listen. Family accounts are created by an admin (registration is disabled), and the household always keeps at least one admin.
 
 **Privacy of the AI and push features.** Letters, screenshots and children's first names are sent to the Claude API (API data is not used for training by default); uploads are stored privately and served only to logged-in users. Reminder texts pass through the public ntfy.sh server: each person's topic is a random 24-character name that acts as the password (anyone who knows it can read the messages). For more privacy, set `NTFY_TOKEN` with a protected or self-hosted ntfy server. The AI's answer is only a proposal: nothing is saved until a person reviews it, and text inside documents is treated as data, not instructions.
 

@@ -168,5 +168,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The MQTT passwords are required (no anonymous broker); CI uses the placeholders.
       - name: Validate docker-compose.yml
-        run: docker compose config --quiet
+        run: cp .env.example .env && docker compose config --quiet

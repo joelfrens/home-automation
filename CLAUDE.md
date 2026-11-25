@@ -19,6 +19,9 @@ AI features), running in Docker on a laptop or a Raspberry Pi 5 with a touch scr
   Docker (not Sail, not Herd). Containers: web :8000, vite :5173, reverb :8080, mqtt-listener,
   queue (`queue:work`), scheduler (`schedule:work`). Shared env in the `x-laravel-env` anchor of
   `docker-compose.yml`.
+- MQTT requires a login (no anonymous access): users admin/sensor/ingestion/laravel, passwords in
+  the git-ignored repo-root `.env` (template `.env.example`), permissions in `mosquitto/acl`,
+  users created at start by `mosquitto/entrypoint.sh`. New device kind = new user in all four places.
 - Postgres 17: host port **5433** (container 5432). One database `home` holds sensor and app tables;
   all schema comes from Laravel migrations (app + packages).
 - AI: `laravel/ai` (`web/config/ai.php`: anthropic + ollama). Each agent's model comes from config.
