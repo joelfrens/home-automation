@@ -16,12 +16,16 @@ Firmware: [`firmware/atom_bme280_mqtt/`](../firmware/atom_bme280_mqtt). It publi
 | Short green blink every 5 s | Reading sent |
 | Red (stays on) | Sensor missing, broker unreachable or publish failed |
 
+On the serial monitor (115200 baud), `failed (state -2)` means the broker can't be reached and
+`state 4`/`5` means the MQTT login in `secrets.h` is wrong.
+
 ## Flashing
 
 1. Arduino IDE 2 with the **esp32 by Espressif** core 3.x.
 2. Libraries: **Adafruit BME280** (+ Adafruit Unified Sensor, Adafruit BusIO), **PubSubClient**.
 3. `cp firmware/atom_bme280_mqtt/secrets.example.h firmware/atom_bme280_mqtt/secrets.h` and fill in
-   your WiFi. `secrets.h` is git-ignored; never commit it.
+   your WiFi and the MQTT login (user `sensor`, password = `MQTT_SENSOR_PASSWORD` from the repo-root
+   `.env`). `secrets.h` is git-ignored; never commit it.
 4. In the sketch, set `MQTT_HOST` (the LAN IP of the machine running Docker) and `ROOM`
    (lowercase, numbers, dashes).
 5. Board **ESP32 Dev Module**, **Upload Speed 115200** (921600 fails on the ATOM Lite), Partition

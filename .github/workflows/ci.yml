@@ -12,7 +12,8 @@ permissions:
 # A new push to the same branch cancels the run still in progress for it.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push to a branch/PR cancels its older run; main always finishes every run.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   ingestion:
@@ -167,5 +168,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The MQTT passwords are required (no anonymous broker); CI uses the placeholders.
       - name: Validate docker-compose.yml
-        run: docker compose config --quiet
+        run: cp .env.example .env && docker compose config --quiet

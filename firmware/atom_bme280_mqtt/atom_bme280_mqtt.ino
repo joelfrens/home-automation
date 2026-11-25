@@ -10,7 +10,7 @@
 #include <PubSubClient.h>
 #include <Wire.h>
 #include <Adafruit_BME280.h>
-#include "secrets.h"   // WIFI_NAME and WIFI_PASSWORD – copy secrets.example.h to secrets.h (not committed to git)
+#include "secrets.h"   // WIFI_NAME, WIFI_PASSWORD, MQTT_USER, MQTT_PASSWORD – copy secrets.example.h to secrets.h (not committed to git)
 
 // ---------- CHANGE THESE ----------
 const char* MQTT_HOST     = "192.168.1.154";     // Mac mini now, Raspberry Pi later
@@ -55,11 +55,12 @@ void connectWiFi() {
 void connectMqtt() {
   if (mqtt.connected() || WiFi.status() != WL_CONNECTED) return;
   led(0, 0, 255);
-  Serial.printf("Connecting to MQTT %s:%d as %s... ", MQTT_HOST, MQTT_PORT, clientId);
-  if (mqtt.connect(clientId)) {
+  Serial.printf("Connecting to MQTT %s:%d as %s (user %s)... ", MQTT_HOST, MQTT_PORT, clientId, MQTT_USER);
+  if (mqtt.connect(clientId, MQTT_USER, MQTT_PASSWORD)) {
     Serial.println("connected");
   } else {
     // -2 = can't reach broker (wrong IP, broker not running, firewall)
+    //  4 = wrong MQTT_USER / MQTT_PASSWORD in secrets.h, 5 = not authorised
     Serial.printf("failed (state %d), will retry\n", mqtt.state());
   }
 }

@@ -10,6 +10,8 @@ x-laravel-env: &laravel-env
   DB_PASSWORD: home_dev_password
   MQTT_HOST: mosquitto
   MQTT_PORT: "1883"
+  MQTT_USERNAME: laravel
+  MQTT_PASSWORD: ${MQTT_LARAVEL_PASSWORD:?set MQTT_LARAVEL_PASSWORD in .env (copy .env.example)}
   REVERB_HOST: reverb             # where Laravel sends broadcasts (the browser uses the page's host instead)
   REVERB_PORT: "8080"
   REVERB_SCHEME: http
@@ -18,10 +20,19 @@ services:
   mosquitto:
     image: eclipse-mosquitto:2
     container_name: home-mosquitto
+    # Creates the users from .env, then starts the broker (no anonymous access).
+    command: sh /mosquitto/entrypoint.sh
+    environment:
+      MQTT_ADMIN_PASSWORD: ${MQTT_ADMIN_PASSWORD:?set MQTT_ADMIN_PASSWORD in .env (copy .env.example)}
+      MQTT_SENSOR_PASSWORD: ${MQTT_SENSOR_PASSWORD:?set MQTT_SENSOR_PASSWORD in .env}
+      MQTT_INGESTION_PASSWORD: ${MQTT_INGESTION_PASSWORD:?set MQTT_INGESTION_PASSWORD in .env}
+      MQTT_LARAVEL_PASSWORD: ${MQTT_LARAVEL_PASSWORD:?set MQTT_LARAVEL_PASSWORD in .env}
     ports:
       - "1883:1883"
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/acl:/mosquitto/config/acl:ro
+      - ./mosquitto/entrypoint.sh:/mosquitto/entrypoint.sh:ro
       - mosquitto-data:/mosquitto/data
     restart: unless-stopped
 
