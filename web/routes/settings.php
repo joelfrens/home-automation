@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Settings\FamilyController;
+use App\Http\Controllers\Settings\NtfyTestController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Auth\Middleware\RequirePassword;
@@ -11,6 +12,9 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::post('settings/profile/ntfy-test', NtfyTestController::class)
+        ->middleware('throttle:6,1')
+        ->name('profile.ntfy-test');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {

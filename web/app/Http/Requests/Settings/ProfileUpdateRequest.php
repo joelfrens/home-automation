@@ -28,6 +28,10 @@ class ProfileUpdateRequest extends FormRequest
      */
     public function rules(): array
     {
-        return $this->profileRules($this->user()->id);
+        return [
+            ...$this->profileRules($this->user()->id),
+            // ntfy topic names: letters, digits, - and _ (https://docs.ntfy.sh/publish/)
+            'ntfy_topic' => ['nullable', 'string', 'min:12', 'max:64', 'regex:/^[A-Za-z0-9_-]+$/'],
+        ];
     }
 }

@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Joelfrens\HomeAutomation\Reminders\EventPlanner;
+use Joelfrens\HomeAutomation\Reminders\Models\Event;
 use Joelfrens\HomeAutomation\Sensors\Range;
 use Joelfrens\HomeAutomation\Sensors\SensorReadings;
 use Joelfrens\HomeAutomation\Sensors\SensorTypes;
@@ -17,7 +19,7 @@ use Joelfrens\HomeAutomation\Sensors\SensorTypes;
  */
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request, SensorReadings $readings, SensorTypes $types): Response
+    public function __invoke(Request $request, SensorReadings $readings, SensorTypes $types, EventPlanner $planner): Response
     {
         $range = Range::fromQuery($request->query('range'));
 
@@ -33,6 +35,8 @@ class DashboardController extends Controller
             'latest' => $readings->latestPerRoom(),
             'history' => $readings->history($range),
             'recent' => $readings->recent(),
+            // "Coming up" card: the next few school/family events (packages/reminders)
+            'upcomingEvents' => $planner->upcoming(limit: 3)->map(fn (Event $e) => $planner->present($e))->values(),
         ]);
     }
 }

@@ -1,4 +1,4 @@
-# Settings shared by every container that runs the Laravel app (web, reverb, mqtt-listener).
+# Settings shared by every container that runs the Laravel app (web, reverb, mqtt-listener, queue, scheduler).
 # Inside Docker, other services are reached by service name. These override web/.env
 # (which keeps localhost addresses for artisan commands run directly on the Mac).
 x-laravel-env: &laravel-env
@@ -82,6 +82,8 @@ services:
     environment:
       <<: *laravel-env
       SERVER_NAME: ":80"          # FrankenPHP: plain HTTP on port 80 inside the container
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # reach Ollama on the host (automatic on Mac, needed on Linux/Pi)
     volumes:
       - ./web:/app                # live code from the Mac, no rebuild needed when editing
       - ./packages:/packages      # our Composer packages (web/composer.json: path repository ../packages/*)
@@ -139,6 +141,40 @@ services:
     healthcheck:
       disable: true
     restart: unless-stopped     # also covers "broker not up yet" at start: it exits, Docker retries
+
+  queue:   # runs queued jobs, e.g. sending reminder notifications to phones (ntfy)
+    image: home-web
+    container_name: home-queue
+    command: php artisan queue:work --tries=3 --backoff=30
+    environment:
+      <<: *laravel-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./web:/app
+      - ./packages:/packages
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+
+  scheduler:   # Laravel's clock: runs reminders:send every minute (see RemindersServiceProvider)
+    image: home-web
+    container_name: home-scheduler
+    command: php artisan schedule:work
+    environment:
+      <<: *laravel-env
+    volumes:
+      - ./web:/app
+      - ./packages:/packages
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    restart: unless-stopped
 
 volumes:
   web-node-modules:

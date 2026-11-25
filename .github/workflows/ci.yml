@@ -106,7 +106,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [sensors, mqtt]
+        package: [sensors, mqtt, reminders]
     defaults:
       run:
         working-directory: packages/${{ matrix.package }}

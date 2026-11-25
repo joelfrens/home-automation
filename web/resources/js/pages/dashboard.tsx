@@ -4,6 +4,7 @@ import { LiveStatus } from '@/components/readings/live-status';
 import { ReadingsChart } from '@/components/readings/readings-chart';
 import { RecentReadings } from '@/components/readings/recent-readings';
 import { RoomCard } from '@/components/readings/room-card';
+import { ComingUp } from '@/components/school/coming-up';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useLiveReadings } from '@/hooks/use-live-readings';
@@ -15,6 +16,7 @@ import type {
     Range,
     Reading,
     RecentReading,
+    SchoolEvent,
     Thresholds,
 } from '@/types';
 
@@ -25,6 +27,7 @@ type Props = {
     latest: Reading[];
     history: HistoryPoint[];
     recent: RecentReading[];
+    upcomingEvents: SchoolEvent[]; // packages/reminders: next 3 events
 };
 
 const RANGES: Range[] = ['6h', '24h', '7d'];
@@ -36,6 +39,7 @@ export default function Dashboard({
     latest: storedLatest,
     history,
     recent: storedRecent,
+    upcomingEvents,
 }: Props) {
     const [metricKey, setMetricKey] = useState(metrics[0]?.key ?? '');
     const metric = metrics.find((m) => m.key === metricKey) ?? metrics[0];
@@ -70,6 +74,7 @@ export default function Dashboard({
                 <div className="flex justify-end">
                     <LiveStatus status={status} />
                 </div>
+                <ComingUp events={upcomingEvents} />
                 {latest.length === 0 ? (
                     <NoReadingsYet />
                 ) : (

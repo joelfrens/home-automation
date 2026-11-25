@@ -1,5 +1,6 @@
-import { Form, Head, usePage } from '@inertiajs/react';
+import { Form, Head, router, usePage } from '@inertiajs/react';
 import { Link } from '@inertiajs/react';
+import NtfyTestController from '@/actions/App/Http/Controllers/Settings/NtfyTestController';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import DeleteUser from '@/components/delete-user';
 import Heading from '@/components/heading';
@@ -18,9 +19,15 @@ type PageProps = {
 export default function Profile({
     mustVerifyEmail,
     status,
+    suggestedNtfyTopic,
+    ntfyServer,
+    aiCostThisMonth,
 }: {
     mustVerifyEmail: boolean;
     status?: string;
+    suggestedNtfyTopic: string;
+    ntfyServer: string;
+    aiCostThisMonth: number;
 }) {
     const { auth } = usePage<PageProps>().props;
 
@@ -110,6 +117,37 @@ export default function Profile({
                                     </div>
                                 )}
 
+                            <div className="grid gap-2">
+                                <Label htmlFor="ntfy_topic">
+                                    Phone notifications (ntfy topic)
+                                </Label>
+
+                                <Input
+                                    id="ntfy_topic"
+                                    className="mt-1 block w-full font-mono"
+                                    defaultValue={
+                                        auth.user.ntfy_topic ??
+                                        suggestedNtfyTopic
+                                    }
+                                    name="ntfy_topic"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                />
+
+                                <p className="text-sm text-muted-foreground">
+                                    Install the free <strong>ntfy</strong> app,
+                                    tap Subscribe and enter this topic (server{' '}
+                                    {ntfyServer}). Treat it like a password:
+                                    anyone who knows it can read your reminders.
+                                    Leave empty for no notifications.
+                                </p>
+
+                                <InputError
+                                    className="mt-2"
+                                    message={errors.ntfy_topic}
+                                />
+                            </div>
+
                             <div className="flex items-center gap-4">
                                 <Button
                                     disabled={processing}
@@ -121,6 +159,29 @@ export default function Profile({
                         </>
                     )}
                 </Form>
+            </div>
+
+            <div className="space-y-4">
+                <Heading
+                    variant="small"
+                    title="Test notification"
+                    description="Save your topic first, then check it reaches your phone."
+                />
+                <Button
+                    variant="outline"
+                    onClick={() =>
+                        router.post(
+                            NtfyTestController.url(),
+                            {},
+                            { preserveScroll: true },
+                        )
+                    }
+                >
+                    Send test notification
+                </Button>
+                <p className="text-sm text-muted-foreground">
+                    AI this month: ${aiCostThisMonth.toFixed(2)}
+                </p>
             </div>
 
             <DeleteUser />
