@@ -119,7 +119,7 @@ export function FileDrop({
             <span className="font-medium">
                 Drop a PDF or screenshot here, or tap to choose
             </span>
-            <span className="text-sm text-muted-foreground">
+            <span className="text-sm text-muted-foreground any-pointer-coarse:hidden">
                 You can also paste a screenshot (⌘V)
             </span>
             <input

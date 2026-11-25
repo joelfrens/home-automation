@@ -141,3 +141,38 @@
         @apply bg-background text-foreground;
     }
 }
+
+/*
+ * Touch screens (phones, tablets, the Pi's display). A Pi touch screen is wide, so it gets the
+ * desktop layout: width breakpoints don't help, so detect touch instead. "any-pointer: coarse"
+ * is true when any touch input exists, even with a mouse plugged in too.
+ * min-height/min-width win over the components' h-9 / size-9 without editing each component,
+ * so every page (and future ones) gets finger-sized targets. See docs/touch.md.
+ */
+@media (any-pointer: coarse) {
+    body {
+        touch-action: manipulation; /* no double-tap zoom, no tap delay */
+    }
+
+    [data-slot='input'],
+    [data-slot='select-trigger'],
+    select,
+    [data-slot='button'] {
+        min-height: 2.75rem; /* 44px */
+    }
+
+    [data-slot='button']:has(> svg:only-child) {
+        min-width: 2.75rem; /* icon-only buttons, e.g. ✕ */
+    }
+
+    [data-slot='checkbox'] {
+        min-width: 1.5rem;
+        min-height: 1.5rem;
+    }
+
+    [data-slot='button'],
+    a {
+        -webkit-touch-callout: none; /* no long-press menu on buttons and links */
+        user-select: none;
+    }
+}

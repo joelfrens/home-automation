@@ -215,6 +215,12 @@ docker-compose.yml               Mosquitto, PostgreSQL, Grafana, Adminer, web, v
 | Changing a provisioned datasource UID breaks Grafana startup | Add a one-off `deleteDatasources` entry for the old datasource, restart, then remove it |
 | Upload fails / no serial port | Use Upload Speed 115200 and a data-capable USB-C cable |
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the checks CI runs and the rules that keep data
+safe, plus guides on [packages](docs/packages.md), [touch screens](docs/touch.md) and the
+[hardware](docs/hardware.md).
+
 ## Security
 
 Development configuration for a trusted LAN: Mosquitto accepts anonymous clients and all credentials in `docker-compose.yml` are defaults. Before exposing anything beyond the local network, enable Mosquitto authentication (and TLS), rotate the database and Grafana passwords, and move them into an untracked `.env`. The Reverb `readings` channel is private: a browser must be logged in (Laravel signs the subscription via `/broadcasting/auth`, rules in `web/routes/channels.php`) before Reverb lets it listen. Family accounts are created by an admin (registration is disabled), and the household always keeps at least one admin.
