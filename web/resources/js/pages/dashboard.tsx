@@ -1,5 +1,5 @@
-import { Head, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { Deferred, Head, router } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 import { LiveStatus } from '@/components/readings/live-status';
 import { ReadingsChart } from '@/components/readings/readings-chart';
 import { RecentReadings } from '@/components/readings/recent-readings';
@@ -7,6 +7,10 @@ import { RoomCard } from '@/components/readings/room-card';
 import { ComingUp } from '@/components/school/coming-up';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import {
+    OutsideCard,
+    OutsideCardSkeleton,
+} from '@/components/weather/outside-card';
 import { useLiveReadings } from '@/hooks/use-live-readings';
 import { useNow } from '@/hooks/use-now';
 import { dashboard } from '@/routes';
@@ -18,6 +22,7 @@ import type {
     RecentReading,
     SchoolEvent,
     Thresholds,
+    Weather,
 } from '@/types';
 
 type Props = {
@@ -28,6 +33,7 @@ type Props = {
     history: HistoryPoint[];
     recent: RecentReading[];
     upcomingEvents: SchoolEvent[]; // packages/reminders: next 3 events
+    weather?: Weather; // packages/weather; deferred, so missing on the first render
 };
 
 const RANGES: Range[] = ['6h', '24h', '7d'];
@@ -40,6 +46,7 @@ export default function Dashboard({
     history,
     recent: storedRecent,
     upcomingEvents,
+    weather,
 }: Props) {
     const [metricKey, setMetricKey] = useState(metrics[0]?.key ?? '');
     const metric = metrics.find((m) => m.key === metricKey) ?? metrics[0];
@@ -50,6 +57,16 @@ export default function Dashboard({
         storedLatest,
         storedRecent,
     );
+
+    // The forecast is cached for 30 minutes on the server; refresh the card at the same pace.
+    useEffect(() => {
+        const timer = window.setInterval(
+            () => router.reload({ only: ['weather'] }),
+            30 * 60 * 1000,
+        );
+
+        return () => window.clearInterval(timer);
+    }, []);
 
     const changeRange = (value: string) => {
         if (!value) {
@@ -74,7 +91,12 @@ export default function Dashboard({
                 <div className="flex justify-end">
                     <LiveStatus status={status} />
                 </div>
-                <ComingUp events={upcomingEvents} />
+                <div className="grid gap-4 md:grid-cols-2">
+                    <Deferred data="weather" fallback={<OutsideCardSkeleton />}>
+                        {weather && <OutsideCard weather={weather} />}
+                    </Deferred>
+                    <ComingUp events={upcomingEvents} />
+                </div>
                 {latest.length === 0 ? (
                     <NoReadingsYet />
                 ) : (

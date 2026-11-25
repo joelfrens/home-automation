@@ -3,3 +3,4 @@ export type * from './navigation';
 export type * from './readings';
 export type * from './ui';
 export type * from './school';
+export type * from './weather';

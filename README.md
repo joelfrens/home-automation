@@ -38,6 +38,7 @@ Two independent consumers share the broker: **ingestion** stores every reading, 
 | Real-time | Laravel Reverb (WebSockets, Pusher protocol), Laravel Echo, php-mqtt/client | `packages/mqtt/`, `web/` |
 | AI | Laravel AI SDK (`laravel/ai`): Claude for vision + structured output, Ollama for local models; per-call cost logging | `packages/reminders/`, `web/config/ai.php` |
 | Notifications | Laravel scheduler + queue, ntfy push to phones | `packages/reminders/` |
+| Weather | Open-Meteo forecast, cached, with graceful fallback | `packages/weather/` |
 | Packages | Composer packages for non-UI logic, tested with Orchestra Testbench | `packages/` |
 | Visualisation | Grafana (provisioned datasource + dashboard), Adminer | `grafana/` |
 | Infrastructure | Docker Compose | `docker-compose.yml` |
@@ -165,6 +166,7 @@ docker compose exec web php artisan test                                        
 docker compose exec -w /packages/sensors web sh -c "composer install && vendor/bin/phpunit"   # sensors package
 docker compose exec -w /packages/mqtt web sh -c "composer install && vendor/bin/phpunit"      # mqtt package
 docker compose exec -w /packages/reminders web sh -c "composer install && vendor/bin/phpunit" # reminders package
+docker compose exec -w /packages/weather web sh -c "composer install && vendor/bin/phpunit"   # weather package
 ```
 
 All of these, plus linting, type checks, static analysis and an ESP32 firmware compile, run in GitHub Actions on every push ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
@@ -175,7 +177,9 @@ No test touches real infrastructure:
 - **Sensors package (PHPUnit + Orchestra Testbench).** Registry loading and validation, MQTT message parsing (same rules as ingestion), ranges, latest-per-room, bucketed history averages, recent messages, on in-memory SQLite.
 - **MQTT package (PHPUnit + Testbench).** `mqtt:listen` subscriptions and event dispatch against a fake broker client, including a failing listener not stopping the loop.
 - **Reminders package (PHPUnit + Testbench).** Reminder times across clock changes, saving/updating events (sent reminders kept), the AI answer cleaned like user input (impossible/past dates, bad times, unknown children), PDF attachments, `reminders:send` (once only, late but not too late, all-day mornings), ntfy messages. The AI is always faked.
-- **Laravel app (Pest/PHPUnit).** School pages, letter upload → AI → review → save (file types, sizes, AI down, nothing found), ntfy topic and test push, AI cost logging, auth flows, disabled registration, family accounts (admin-only, last admin protected), private channel authorisation (guests refused), dashboard page props, MQTT message → broadcast (valid, invalid, Reverb down).
+- **Weather package (PHPUnit + Testbench).** Open-Meteo answers parsed into "now" and per-window outlooks (min/max, rain chance), summer-time windows, one cached request shared by all callers, server errors / timeouts / malformed answers return null and back off, no location means no request, coordinates rounded before sending.
+- **Laravel app (Pest/PHPUnit).** School pages, letter upload → AI → review → save (file types, sizes, AI down, nothing found), ntfy topic and test push, AI cost logging, auth flows, disabled registration, family accounts (admin-only, last admin protected), private channel authorisation (guests refused), dashboard page props and the deferred weather card, MQTT message → broadcast (valid, invalid, Reverb down).
+- **No internet in tests.** Every unfaked HTTP request fails the test (`Http::preventStrayRequests()`), so tests never call Open-Meteo, ntfy or an AI model.
 - **Safety guard.** Both PHP suites force in-memory SQLite and refuse to run `RefreshDatabase` against any other database (added after a test run once wiped the development database).
 
 ### Repository layout
@@ -195,6 +199,7 @@ packages/sensors/                joelfrens/home-automation-sensors: registry, Me
                                  migration, SensorReadings queries, SensorMessage parser, tests
 packages/mqtt/                   joelfrens/home-automation-mqtt: broker connection, mqtt:listen, tests
 packages/reminders/              joelfrens/home-automation-reminders: events, AI extraction, reminders:send, ntfy
+packages/weather/                joelfrens/home-automation-weather: Open-Meteo forecast, weather:show
 web/                             Laravel 13 + React host app (Dockerfile, dashboard, auth)
 mosquitto/mosquitto.conf         Broker config
 grafana/provisioning/
@@ -229,7 +234,7 @@ safe, plus guides on [packages](docs/packages.md), [touch screens](docs/touch.md
 
 Designed for a trusted home network. **MQTT requires a login**: each kind of client (sensors, ingestion, Laravel, admin) has its own user and password (from the untracked `.env`), and [`mosquitto/acl`](mosquitto/acl) limits what each may do, e.g. sensors can only publish readings and can't read anything. The database and Grafana passwords in `docker-compose.yml` are still development defaults; before exposing anything beyond the LAN, change them and add TLS to MQTT. The Reverb `readings` channel is private: a browser must be logged in (Laravel signs the subscription via `/broadcasting/auth`, rules in `web/routes/channels.php`) before Reverb lets it listen. Family accounts are created by an admin (registration is disabled), and the household always keeps at least one admin.
 
-**Privacy of the AI and push features.** Letters, screenshots and children's first names are sent to the Claude API (API data is not used for training by default); uploads are stored privately and served only to logged-in users. Reminder texts pass through the public ntfy.sh server: each person's topic is a random 24-character name that acts as the password (anyone who knows it can read the messages). For more privacy, set `NTFY_TOKEN` with a protected or self-hosted ntfy server. The AI's answer is only a proposal: nothing is saved until a person reviews it, and text inside documents is treated as data, not instructions.
+**Privacy of the AI and push features.** Letters, screenshots and children's first names are sent to the Claude API (API data is not used for training by default); uploads are stored privately and served only to logged-in users. The outdoor forecast comes from Open-Meteo; only the home's coordinates, rounded to about 1 km, are sent. Reminder texts pass through the public ntfy.sh server: each person's topic is a random 24-character name that acts as the password (anyone who knows it can read the messages). For more privacy, set `NTFY_TOKEN` with a protected or self-hosted ntfy server. The AI's answer is only a proposal: nothing is saved until a person reviews it, and text inside documents is treated as data, not instructions.
 
 ## Roadmap
 

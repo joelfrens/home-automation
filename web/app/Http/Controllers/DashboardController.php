@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -10,6 +11,7 @@ use Joelfrens\HomeAutomation\Reminders\Models\Event;
 use Joelfrens\HomeAutomation\Sensors\Range;
 use Joelfrens\HomeAutomation\Sensors\SensorReadings;
 use Joelfrens\HomeAutomation\Sensors\SensorTypes;
+use Joelfrens\HomeAutomation\Weather\Forecast;
 
 /**
  * The home dashboard. All sensor logic lives in the joelfrens/home-automation-sensors
@@ -19,7 +21,7 @@ use Joelfrens\HomeAutomation\Sensors\SensorTypes;
  */
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request, SensorReadings $readings, SensorTypes $types, EventPlanner $planner): Response
+    public function __invoke(Request $request, SensorReadings $readings, SensorTypes $types, EventPlanner $planner, Forecast $forecast): Response
     {
         $range = Range::fromQuery($request->query('range'));
 
@@ -37,6 +39,23 @@ class DashboardController extends Controller
             'recent' => $readings->recent(),
             // "Coming up" card: the next few school/family events (packages/reminders)
             'upcomingEvents' => $planner->upcoming(limit: 3)->map(fn (Event $e) => $planner->present($e))->values(),
+            // "Outside" card (packages/weather). Deferred: the page shows at once and the browser
+            // fetches this right after, so a slow weather service never delays the dashboard.
+            'weather' => Inertia::defer(fn () => $this->weather($forecast)),
         ]);
+    }
+
+    /**
+     * @return array{enabled: bool, current: array{temperature: float, time: string}|null, next: array{minTemperature: float, maxTemperature: float, rainChance: int, hours: int}|null}
+     */
+    private function weather(Forecast $forecast): array
+    {
+        $now = CarbonImmutable::now();
+
+        return [
+            'enabled' => $forecast->enabled(),
+            'current' => $forecast->current()?->toArray(),
+            'next' => $forecast->between($now, $now->addHours(3))?->toArray(),
+        ];
     }
 }

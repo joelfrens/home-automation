@@ -3,6 +3,7 @@
 namespace Tests;
 
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\Http;
 use Laravel\Fortify\Features;
 use RuntimeException;
 
@@ -15,6 +16,17 @@ abstract class TestCase extends BaseTestCase
      * (Hooked into setUpTraits, which runs right before RefreshDatabase does its work.
      * Not beforeRefreshingDatabase: the trait's own empty version would override it.)
      */
+    /**
+     * No test talks to the internet (weather, ntfy, AI): any HTTP request a test hasn't
+     * faked with Http::fake() fails the test instead of going out.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Http::preventStrayRequests();
+    }
+
     protected function setUpTraits()
     {
         $this->refuseToResetARealDatabase();

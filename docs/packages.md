@@ -8,6 +8,7 @@ them and owns only what users see: routes, controllers, form requests and React 
 | [`sensors`](../packages/sensors) | Sensor-type registry, `measurements` table, reading queries, MQTT message parser |
 | [`mqtt`](../packages/mqtt) | Broker connection and `php artisan mqtt:listen` |
 | [`reminders`](../packages/reminders) | Family events, AI letter reading, `reminders:send`, ntfy push |
+| [`weather`](../packages/weather) | Outdoor forecast (Open-Meteo): temperature now, min/max and rain chance for a time window |
 
 ## Package or `web/`?
 
